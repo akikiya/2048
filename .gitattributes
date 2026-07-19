@@ -1,0 +1,7 @@
+# Mark machine-generated files so GitHub linguist ignores them in language stats
+pnpm-lock.yaml linguist-generated=true
+package-lock.json linguist-generated=true
+yarn.lock linguist-generated=true
+tsconfig.tsbuildinfo linguist-generated=true
+*.tsbuildinfo linguist-generated=true
+*.gen.* linguist-generated=true
