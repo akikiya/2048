@@ -7,6 +7,7 @@
     isWin,
     type Direction,
   } from './lib/game';
+  import GithubCorner from './lib/GithubCorner.svelte';
 
   const SIZE = 4;
   const WIN_TARGET = 2048;
@@ -92,6 +93,8 @@
 </script>
 
 <svelte:window onkeydown={onKeydown} />
+
+<GithubCorner href="https://github.com/akikiya/2048" />
 
 <main>
   <header>
