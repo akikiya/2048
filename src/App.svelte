@@ -7,7 +7,7 @@
     isWin,
     type Direction,
   } from './lib/game';
-  import { chooseBestMove } from './lib/ai';
+  import { requestBestMove } from './lib/ai/aiClient';
   import GithubCorner from './lib/GithubCorner.svelte';
 
   const SIZE = 4;
@@ -45,18 +45,23 @@
   let aiSpeed = $state(120);
   let aiDepth = $state(3);
 
-  function aiStep() {
+  let aiSeq = 0;
+
+  async function aiStep() {
+    const seq = ++aiSeq;
     if (!aiRunning) return;
     if (over || (won && !keepPlaying)) {
       aiRunning = false;
       return;
     }
-    const direction = chooseBestMove(board, aiDepth);
+    const direction = await requestBestMove(board, aiDepth);
+    if (seq !== aiSeq || !aiRunning) return;
     if (!direction) {
       aiRunning = false;
       return;
     }
     handleMove(direction);
+    if (seq !== aiSeq || !aiRunning) return;
     aiTimer = setTimeout(aiStep, aiSpeed);
   }
 
@@ -65,13 +70,17 @@
     if (aiRunning) {
       if (over || (won && !keepPlaying)) newGame();
       aiStep();
-    } else if (aiTimer) {
-      clearTimeout(aiTimer);
-      aiTimer = null;
+    } else {
+      aiSeq++;
+      if (aiTimer) {
+        clearTimeout(aiTimer);
+        aiTimer = null;
+      }
     }
   }
 
   function newGame() {
+    aiSeq++;
     if (aiTimer) {
       clearTimeout(aiTimer);
       aiTimer = null;

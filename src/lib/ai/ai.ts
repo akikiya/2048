@@ -1,4 +1,4 @@
-import { move, getEmptyCells, type Direction, type MoveResult } from './game';
+import { move, getEmptyCells, type Direction, type MoveResult } from '../game';
 
 const DIRECTIONS: Direction[] = ['up', 'down', 'left', 'right'];
 
