@@ -1,7 +1,31 @@
-# Mark machine-generated files so GitHub linguist ignores them in language stats
+﻿# Mark machine-generated files so GitHub linguist ignores them in language stats
 pnpm-lock.yaml linguist-generated=true
 package-lock.json linguist-generated=true
 yarn.lock linguist-generated=true
 tsconfig.tsbuildinfo linguist-generated=true
 *.tsbuildinfo linguist-generated=true
 *.gen.* linguist-generated=true
+
+# Normalize line endings: store text files with LF in the repo.
+# On checkout, Git applies the platform-native ending unless eol is set.
+* text=auto eol=lf
+
+# Source files: force LF everywhere (consistent across platforms)
+*.ts text eol=lf
+*.js text eol=lf
+*.svelte text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Binary / generated files: do not touch line endings
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text eol=lf
+pnpm-lock.yaml -text
