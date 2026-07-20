@@ -143,6 +143,8 @@ h1 {
 .controls {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
   margin-bottom: 12px;
 }
 
@@ -161,6 +163,19 @@ h1 {
   &:hover {
     background: var(--btn-bg-hover);
   }
+}
+
+.controls .speed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--tile-text);
+  font-weight: 700;
+}
+
+.controls .speed input {
+  cursor: pointer;
 }
 
 .board {

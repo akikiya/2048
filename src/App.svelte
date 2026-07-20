@@ -7,6 +7,7 @@
     isWin,
     type Direction,
   } from './lib/game';
+  import { chooseBestMove } from './lib/ai';
   import GithubCorner from './lib/GithubCorner.svelte';
 
   const SIZE = 4;
@@ -39,7 +40,42 @@
     syncDerived();
   }
 
+  let aiRunning = $state(false);
+  let aiTimer: ReturnType<typeof setTimeout> | null = null;
+  let aiSpeed = $state(120);
+
+  function aiStep() {
+    if (!aiRunning) return;
+    if (over || (won && !keepPlaying)) {
+      aiRunning = false;
+      return;
+    }
+    const direction = chooseBestMove(board);
+    if (!direction) {
+      aiRunning = false;
+      return;
+    }
+    handleMove(direction);
+    aiTimer = setTimeout(aiStep, aiSpeed);
+  }
+
+  function toggleAI() {
+    aiRunning = !aiRunning;
+    if (aiRunning) {
+      if (over || (won && !keepPlaying)) newGame();
+      aiStep();
+    } else if (aiTimer) {
+      clearTimeout(aiTimer);
+      aiTimer = null;
+    }
+  }
+
   function newGame() {
+    if (aiTimer) {
+      clearTimeout(aiTimer);
+      aiTimer = null;
+    }
+    aiRunning = false;
     board = createInitialBoard(SIZE);
     score = 0;
     won = false;
@@ -117,6 +153,20 @@
 
   <div class="controls">
     <button type="button" onclick={newGame}>New Game</button>
+    <button type="button" onclick={toggleAI}>
+      {aiRunning ? 'Stop AI' : 'Run AI'}
+    </button>
+    <label class="speed">
+      Speed
+      <input
+        type="range"
+        min="0"
+        max="500"
+        step="20"
+        bind:value={aiSpeed}
+        disabled={aiRunning}
+      />
+    </label>
   </div>
 
   <div
