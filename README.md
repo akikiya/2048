@@ -13,6 +13,7 @@ Join the tiles to reach **2048**! Slide the tiles with arrow keys (or WASD), and
 - Game-over detection when no moves remain
 - **AI auto-play** — an Expectimax solver plays the game for you, running off the main thread in a Web Worker so the UI stays responsive
 - Adjustable **search depth** (1–6) and **move speed** (0–500 ms) for the AI
+- Adjustable **board size** (3×3, 4×4, 5×5, 6×6) — pick a size and the board, scoring, and AI solver all adapt
 - Pure, framework-agnostic game logic with unit tests
 
 ## Getting started
@@ -36,6 +37,7 @@ pnpm test     # run unit tests with vitest
 - **Move**: Arrow keys or `W` `A` `S` `D`. On touch devices, swipe in a direction.
 - **Goal**: Combine tiles to reach 2048. Tiles merge when two of the same value collide.
 - **New game**: Click the "New Game" button.
+- **Board size**: Use the size picker (3×3 to 6×6) to change the board. Changing size starts a fresh game and rescales the AI heuristic automatically.
 - **AI auto-play**: Click "Run AI" to let the solver play. While running, the settings panel is locked; click "Stop AI" to take back control.
   - **Speed**: delay between AI moves (0–500 ms). Lower is faster.
   - **Depth**: Expectimax search depth (1–6). Higher explores further for stronger play at the cost of more compute.

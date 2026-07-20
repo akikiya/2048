@@ -2,19 +2,38 @@ import { move, getEmptyCells, type Direction, type MoveResult } from '../game';
 
 const DIRECTIONS: Direction[] = ['up', 'down', 'left', 'right'];
 
-const WEIGHT_MATRIX = [
-	[15, 14, 13, 12],
-	[8, 9, 10, 11],
-	[7, 6, 5, 4],
-	[0, 1, 2, 3],
-];
+function buildWeightMatrix(size: number): number[][] {
+	const matrix: number[][] = [];
+	for (let row = 0; row < size; row++) {
+		const matrixRow: number[] = [];
+		for (let col = 0; col < size; col++) {
+			const distance = Math.abs(row - (size - 1)) + Math.abs(col - (size - 1));
+			matrixRow.push(size * size - 1 - distance);
+		}
+		matrix.push(matrixRow);
+	}
+	return matrix;
+}
 
-const CORNERS: [number, number][] = [
-	[0, 0],
-	[0, 3],
-	[3, 0],
-	[3, 3],
-];
+function cornersFor(size: number): [number, number][] {
+	return [
+		[0, 0],
+		[0, size - 1],
+		[size - 1, 0],
+		[size - 1, size - 1],
+	];
+}
+
+let weightMatrix = buildWeightMatrix(4);
+let corners = cornersFor(4);
+
+function syncSize(board: number[][]) {
+	const n = board.length;
+	if (weightMatrix.length !== n) {
+		weightMatrix = buildWeightMatrix(n);
+		corners = cornersFor(n);
+	}
+}
 
 function boardKey(board: number[][]): string {
 	let key = '';
@@ -87,6 +106,7 @@ function countMergeable(board: number[][]): number {
 }
 
 function evaluate(board: number[][]): number {
+	syncSize(board);
 	const n = board.length;
 	let empty = 0;
 	let weightSum = 0;
@@ -99,13 +119,13 @@ function evaluate(board: number[][]): number {
 			if (value === 0) {
 				empty++;
 			} else {
-				weightSum += log2(value) * WEIGHT_MATRIX[row][col];
+				weightSum += log2(value) * weightMatrix[row][col];
 				if (value > maxTile) maxTile = value;
 			}
 		}
 	}
 
-	for (const [r, c] of CORNERS) {
+	for (const [r, c] of corners) {
 		if (board[r][c] === maxTile && maxTile !== 0) {
 			maxAtCorner = true;
 			break;

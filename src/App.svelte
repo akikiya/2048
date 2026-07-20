@@ -10,13 +10,24 @@
   import { requestBestMove } from './lib/ai/aiClient';
   import GithubCorner from './lib/GithubCorner.svelte';
 
-  const SIZE = 4;
   const WIN_TARGET = 2048;
-  const BEST_KEY = '2048-best';
+  const SIZES = [3, 4, 5, 6];
 
-  let board = $state(createInitialBoard(SIZE));
+  function bestKey(size: number): string {
+    return `2048-best-${size}`;
+  }
+
+  const LEGACY_BEST_KEY = '2048-best';
+  const legacyBest = localStorage.getItem(LEGACY_BEST_KEY);
+  if (legacyBest !== null && localStorage.getItem(bestKey(4)) === null) {
+    localStorage.setItem(bestKey(4), legacyBest);
+    localStorage.removeItem(LEGACY_BEST_KEY);
+  }
+
+  let size = $state(4);
+  let board = $state(createInitialBoard(4));
   let score = $state(0);
-  let best = $state(Number(localStorage.getItem(BEST_KEY)) || 0);
+  let best = $state(Number(localStorage.getItem(bestKey(size))) || 0);
   let won = $state(false);
   let keepPlaying = $state(false);
   let over = $state(false);
@@ -34,7 +45,7 @@
     score += result.scoreGained;
     if (score > best) {
       best = score;
-      localStorage.setItem(BEST_KEY, String(best));
+      localStorage.setItem(bestKey(size), String(best));
     }
     spawnTile(board);
     syncDerived();
@@ -86,11 +97,18 @@
       aiTimer = null;
     }
     aiRunning = false;
-    board = createInitialBoard(SIZE);
+    board = createInitialBoard(size);
     score = 0;
     won = false;
     keepPlaying = false;
     over = false;
+  }
+
+  function changeSize(next: number) {
+    if (next === size) return;
+    size = next;
+    best = Number(localStorage.getItem(bestKey(size))) || 0;
+    newGame();
   }
 
   function continuePlaying() {
@@ -162,6 +180,20 @@
   </p>
 
   <div class="controls">
+    <div class="size-picker" role="group" aria-label="Board size">
+      <span class="size-label">Size</span>
+      {#each SIZES as s}
+        <button
+          type="button"
+          class="size-option"
+          class:active={s === size}
+          onclick={() => changeSize(s)}
+          disabled={aiRunning}
+        >
+          {s}×{s}
+        </button>
+      {/each}
+    </div>
     <button type="button" onclick={newGame}>New Game</button>
     <button type="button" class="ai-toggle" class:running={aiRunning} onclick={toggleAI}>
       {aiRunning ? 'Stop AI' : 'Run AI'}
@@ -198,14 +230,14 @@
 
   <div
     class="board"
-    style="--size: {SIZE}"
+    style="--size: {size}"
     role="application"
     aria-label="2048 game board"
     ontouchstart={onTouchStart}
     ontouchend={onTouchEnd}
   >
     <div class="grid-background">
-      {#each Array(SIZE * SIZE) as _}
+      {#each Array(size * size) as _}
         <div class="cell"></div>
       {/each}
     </div>
