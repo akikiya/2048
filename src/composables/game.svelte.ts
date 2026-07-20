@@ -7,7 +7,20 @@ import {
   type Direction,
 } from '../game/game';
 
-const WIN_TARGET = 2048;
+function winTarget(size: number): number {
+  switch (size) {
+    case 3:
+      return 512;
+    case 4:
+      return 2048;
+    case 5:
+      return 8192;
+    case 6:
+      return 32768;
+    default:
+      return 2048;
+  }
+}
 
 function bestKey(size: number): string {
   return `2048-best-${size}`;
@@ -30,7 +43,7 @@ export function createGame(initialSize = 4) {
   let over = $state(false);
 
   function syncDerived() {
-    if (isWin(board, WIN_TARGET)) won = true;
+    if (isWin(board, winTarget(size))) won = true;
     if (!hasMoves(board)) over = true;
   }
 
@@ -54,6 +67,7 @@ export function createGame(initialSize = 4) {
     won = false;
     keepPlaying = false;
     over = false;
+    syncDerived();
   }
 
   function changeSize(next: number) {

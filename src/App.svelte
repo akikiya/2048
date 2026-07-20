@@ -13,6 +13,16 @@
   const game = createGame(4);
   const ai = useAI(game);
   const keyboard = useKeyboard((direction) => game.moveTile(direction));
+
+  const target = $derived(
+    game.size === 3
+      ? 512
+      : game.size === 4
+        ? 2048
+        : game.size === 5
+          ? 8192
+          : 32768
+  );
 </script>
 
 <svelte:window onkeydown={keyboard.handle} />
@@ -26,7 +36,7 @@
   </header>
 
   <p class="intro">
-    Join the tiles, get to <strong>2048!</strong> Use arrow keys or swipe.
+    Join the tiles, get to <strong>{target}!</strong> Use arrow keys or swipe.
   </p>
 
   <div class="controls">
