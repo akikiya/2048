@@ -142,6 +142,7 @@ h1 {
 
 .controls {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
   gap: 10px;
@@ -165,16 +166,57 @@ h1 {
   }
 }
 
-.controls .speed {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--tile-text);
-  font-weight: 700;
+.controls .ai-toggle {
+  &.running {
+    background: #c0392b;
+    &:hover {
+      background: #a93226;
+    }
+  }
 }
 
-.controls .speed input {
+.ai-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cell-bg) 35%, transparent);
+
+  &.disabled {
+    opacity: 0.55;
+  }
+}
+
+.slider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.slider-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tile-text);
+  white-space: nowrap;
+}
+
+.slider-value {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--btn-bg);
+  min-width: 44px;
+  text-align: right;
+}
+
+.slider input[type='range'] {
+  grid-column: 1 / -1;
+  width: 160px;
+  max-width: 200px;
+  accent-color: var(--btn-bg);
   cursor: pointer;
 }
 

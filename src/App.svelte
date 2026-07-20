@@ -43,6 +43,7 @@
   let aiRunning = $state(false);
   let aiTimer: ReturnType<typeof setTimeout> | null = null;
   let aiSpeed = $state(120);
+  let aiDepth = $state(3);
 
   function aiStep() {
     if (!aiRunning) return;
@@ -50,7 +51,7 @@
       aiRunning = false;
       return;
     }
-    const direction = chooseBestMove(board);
+    const direction = chooseBestMove(board, aiDepth);
     if (!direction) {
       aiRunning = false;
       return;
@@ -153,20 +154,37 @@
 
   <div class="controls">
     <button type="button" onclick={newGame}>New Game</button>
-    <button type="button" onclick={toggleAI}>
+    <button type="button" class="ai-toggle" class:running={aiRunning} onclick={toggleAI}>
       {aiRunning ? 'Stop AI' : 'Run AI'}
     </button>
-    <label class="speed">
-      Speed
-      <input
-        type="range"
-        min="0"
-        max="500"
-        step="20"
-        bind:value={aiSpeed}
-        disabled={aiRunning}
-      />
-    </label>
+    <div class="ai-settings" class:disabled={aiRunning}>
+      <label class="slider">
+        <span class="slider-label">
+          Speed <span class="slider-value">{aiSpeed} ms</span>
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="500"
+          step="20"
+          bind:value={aiSpeed}
+          disabled={aiRunning}
+        />
+      </label>
+      <label class="slider">
+        <span class="slider-label">
+          Depth <span class="slider-value">{aiDepth}</span>
+        </span>
+        <input
+          type="range"
+          min="1"
+          max="6"
+          step="1"
+          bind:value={aiDepth}
+          disabled={aiRunning}
+        />
+      </label>
+    </div>
   </div>
 
   <div

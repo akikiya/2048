@@ -9,8 +9,25 @@ const WEIGHT_MATRIX = [
 	[0, 1, 2, 3],
 ];
 
-function cloneBoard(board: number[][]): number[][] {
-	return board.map((row) => [...row]);
+const CORNERS: [number, number][] = [
+	[0, 0],
+	[0, 3],
+	[3, 0],
+	[3, 3],
+];
+
+function boardKey(board: number[][]): string {
+	let key = '';
+	for (let r = 0; r < board.length; r++) {
+		for (let c = 0; c < board.length; c++) {
+			key += board[r][c] + ',';
+		}
+	}
+	return key;
+}
+
+function log2(value: number): number {
+	return Math.log2(value);
 }
 
 function smoothScore(board: number[][]): number {
@@ -20,18 +37,11 @@ function smoothScore(board: number[][]): number {
 		for (let col = 0; col < n; col++) {
 			const value = board[row][col];
 			if (value === 0) continue;
-			const neighbors: number[] = [];
+			const log = log2(value);
 			if (row > 0 && board[row - 1][col] !== 0)
-				neighbors.push(board[row - 1][col]);
-			if (row < n - 1 && board[row + 1][col] !== 0)
-				neighbors.push(board[row + 1][col]);
-			if (col > 0 && board[row][col - 1] !== 0)
-				neighbors.push(board[row][col - 1]);
+				score -= Math.abs(log - log2(board[row - 1][col]));
 			if (col < n - 1 && board[row][col + 1] !== 0)
-				neighbors.push(board[row][col + 1]);
-			for (const neighbor of neighbors) {
-				score -= Math.abs(Math.log2(value) - Math.log2(neighbor));
-			}
+				score -= Math.abs(log - log2(board[row][col + 1]));
 		}
 	}
 	return score;
@@ -43,8 +53,8 @@ function monotonicityScore(board: number[][]): number {
 
 	for (let row = 0; row < n; row++) {
 		for (let col = 0; col < n - 1; col++) {
-			const current = board[row][col] ? Math.log2(board[row][col]) : 0;
-			const next = board[row][col + 1] ? Math.log2(board[row][col + 1]) : 0;
+			const current = board[row][col] ? log2(board[row][col]) : 0;
+			const next = board[row][col + 1] ? log2(board[row][col + 1]) : 0;
 			if (current > next) totals[0] += next - current;
 			else totals[1] += current - next;
 		}
@@ -52,44 +62,14 @@ function monotonicityScore(board: number[][]): number {
 
 	for (let col = 0; col < n; col++) {
 		for (let row = 0; row < n - 1; row++) {
-			const current = board[row][col] ? Math.log2(board[row][col]) : 0;
-			const next = board[row + 1][col] ? Math.log2(board[row + 1][col]) : 0;
+			const current = board[row][col] ? log2(board[row][col]) : 0;
+			const next = board[row + 1][col] ? log2(board[row + 1][col]) : 0;
 			if (current > next) totals[2] += next - current;
 			else totals[3] += current - next;
 		}
 	}
 
 	return Math.max(totals[0], totals[1]) + Math.max(totals[2], totals[3]);
-}
-
-function evaluate(board: number[][]): number {
-	const n = board.length;
-	let empty = 0;
-	let weightSum = 0;
-	let maxTile = 0;
-
-	for (let row = 0; row < n; row++) {
-		for (let col = 0; col < n; col++) {
-			const value = board[row][col];
-			if (value === 0) {
-				empty++;
-			} else {
-				weightSum += Math.log2(value) * WEIGHT_MATRIX[row][col];
-				if (value > maxTile) maxTile = value;
-			}
-		}
-	}
-
-	const mergeable = countMergeable(board);
-
-	return (
-		weightSum * 1.0 +
-		Math.log2(maxTile) * 2.5 +
-		empty * 2.7 +
-		smoothScore(board) * 0.1 +
-		monotonicityScore(board) * 1.0 +
-		mergeable * 1.0
-	);
 }
 
 function countMergeable(board: number[][]): number {
@@ -106,51 +86,124 @@ function countMergeable(board: number[][]): number {
 	return count;
 }
 
+function evaluate(board: number[][]): number {
+	const n = board.length;
+	let empty = 0;
+	let weightSum = 0;
+	let maxTile = 0;
+	let maxAtCorner = false;
+
+	for (let row = 0; row < n; row++) {
+		for (let col = 0; col < n; col++) {
+			const value = board[row][col];
+			if (value === 0) {
+				empty++;
+			} else {
+				weightSum += log2(value) * WEIGHT_MATRIX[row][col];
+				if (value > maxTile) maxTile = value;
+			}
+		}
+	}
+
+	for (const [r, c] of CORNERS) {
+		if (board[r][c] === maxTile && maxTile !== 0) {
+			maxAtCorner = true;
+			break;
+		}
+	}
+
+	const mergeable = countMergeable(board);
+
+	return (
+		weightSum * 1.0 +
+		Math.log2(maxTile) * 2.7 +
+		empty * 2.7 +
+		smoothScore(board) * 0.1 +
+		monotonicityScore(board) * 1.0 +
+		mergeable * 1.0 +
+		(maxAtCorner ? 10 : 0)
+	);
+}
+
+interface SearchState {
+	cache: Map<string, number>;
+	gameOverPenalty: number;
+}
+
 function expectimax(
+	state: SearchState,
 	board: number[][],
 	depth: number,
 	isChance: boolean
 ): number {
-	const n = board.length;
-	if (depth === 0) return evaluate(board);
+	const key = boardKey(board);
+	if (depth === 0) {
+		let cached = state.cache.get(key);
+		if (cached === undefined) {
+			cached = evaluate(board);
+			state.cache.set(key, cached);
+		}
+		return cached;
+	}
+
+	const cached = state.cache.get(key);
+	if (cached !== undefined) return cached;
+
+	let result: number;
 
 	if (isChance) {
-		let total = 0;
-		let moves = 0;
 		const empty = getEmptyCells(board);
-		for (const { row, col } of empty) {
-			for (const value of [2, 4]) {
-				const next = cloneBoard(board);
-				next[row][col] = value;
-				const prob = value === 2 ? 0.9 : 0.1;
-				total += prob * expectimax(next, depth - 1, false);
-				moves++;
+		if (empty.length === 0) {
+			result = evaluate(board);
+		} else {
+			let total = 0;
+			const cellProb = 1 / empty.length;
+			for (const { row, col } of empty) {
+				const next2 = board.map((rowArr) => [...rowArr]);
+				next2[row][col] = 2;
+				total += 0.9 * cellProb * expectimax(state, next2, depth - 1, false);
+
+				const next4 = board.map((rowArr) => [...rowArr]);
+				next4[row][col] = 4;
+				total += 0.1 * cellProb * expectimax(state, next4, depth - 1, false);
 			}
+			result = total;
 		}
-		if (moves === 0) return evaluate(board);
-		return total / moves;
+	} else {
+		let best = -Infinity;
+		let anyMove = false;
+		for (const direction of DIRECTIONS) {
+			const m: MoveResult = move(board, direction);
+			if (!m.moved) continue;
+			anyMove = true;
+			const value = expectimax(state, m.board, depth - 1, true);
+			if (value > best) best = value;
+		}
+		if (!anyMove) {
+			result = -state.gameOverPenalty;
+		} else {
+			result = best;
+		}
 	}
 
-	let best = -Infinity;
-	let anyMove = false;
-	for (const direction of DIRECTIONS) {
-		const result: MoveResult = move(board, direction);
-		if (!result.moved) continue;
-		anyMove = true;
-		const value = expectimax(result.board, depth - 1, true);
-		if (value > best) best = value;
+	if (result > -state.gameOverPenalty) {
+		state.cache.set(key, result);
 	}
-	if (!anyMove) return evaluate(board);
-	return best;
+	return result;
 }
 
 export function chooseBestMove(board: number[][], depth: number = 3): Direction | null {
+	const state: SearchState = {
+		cache: new Map<string, number>(),
+		gameOverPenalty: 1e9,
+	};
+
 	let bestDirection: Direction | null = null;
 	let bestScore = -Infinity;
 	for (const direction of DIRECTIONS) {
 		const result = move(board, direction);
 		if (!result.moved) continue;
-		const score = expectimax(result.board, depth - 1, true);
+		const score = expectimax(state, result.board, depth - 1, true);
 		if (score > bestScore) {
 			bestScore = score;
 			bestDirection = direction;
