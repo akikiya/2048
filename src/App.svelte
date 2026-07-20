@@ -27,7 +27,7 @@
 
 <svelte:window onkeydown={keyboard.handle} />
 
-<GithubCorner href="https://github.com/akikiya/2048" />
+<GithubCorner href="https://github.com/akikiya/2048" fill="#8f7a66" />
 
 <main>
   <header>
