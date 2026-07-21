@@ -110,6 +110,64 @@ function countMergeable(board: number[][]): number {
 	return count;
 }
 
+function snakeScore(board: number[][]): number {
+	// Reward the classic snake/winding pattern: tiles generally decrease along a
+	// serpentine path from the anchor corner. This encourages the structured
+	// stacking that human players use to reach high tiles.
+	const n = board.length;
+	let score = 0;
+	for (let row = 0; row < n; row++) {
+		const evenRow = row % 2 === 0;
+		for (let col = 0; col < n - 1; col++) {
+			const c1 = evenRow ? col : n - 1 - col;
+			const c2 = evenRow ? col + 1 : n - 1 - (col + 1);
+			const v1 = board[row][c1] ? log2(board[row][c1]) : 0;
+			const v2 = board[row][c2] ? log2(board[row][c2]) : 0;
+			if (v1 >= v2) score += (v1 - v2) * 0.5;
+			else score -= (v2 - v1);
+		}
+	}
+	return score;
+}
+
+function cornerQualityScore(board: number[][]): number {
+	// Quantify how well the largest tiles are anchored in corners/edges.
+	// Strongly prefer corners, moderately prefer same-edge adjacency, penalize center.
+	const n = board.length;
+	const positions: { r: number; c: number; val: number }[] = corners
+		.map(([r, c]) => ({ r, c, val: board[r][c] }))
+		.filter(p => p.val > 0)
+		.sort((a, b) => b.val - a.val);
+
+	if (positions.length === 0) return 0;
+
+	let score = 0;
+	const maxVal = positions[0].val;
+
+	// Largest tile in any corner: strong bonus.
+	for (const [r, c] of corners) {
+		if (board[r][c] === maxVal) {
+			score += 50;
+			break;
+		}
+	}
+
+	if (positions.length >= 2) {
+		const [r1, c1] = [positions[0].r, positions[0].c];
+		const [r2, c2] = [positions[1].r, positions[1].c];
+		const sameEdge = r1 === r2 || c1 === c2;
+		const adjacent = Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
+		if (sameEdge || adjacent) score += 20;
+	}
+
+	// Penalize if the max tile is trapped in the center (not on any edge).
+	const [mr, mc] = [positions[0].r, positions[0].c];
+	const onEdge = mr === 0 || mr === n - 1 || mc === 0 || mc === n - 1;
+	if (!onEdge && maxVal > 0) score -= 30;
+
+	return score;
+}
+
 function evaluate(board: number[][]): number {
 	syncSize(board);
 	const n = board.length;
@@ -138,15 +196,19 @@ function evaluate(board: number[][]): number {
 	}
 
 	const mergeable = countMergeable(board);
+	const snake = snakeScore(board);
+	const cornerQuality = cornerQualityScore(board);
 
 	return (
-		weightSum * 1.0 +                    // Favor high-value tiles in high-weight cells (bottom-right).
-		Math.log2(maxTile) * 2.7 +          // Strongly reward achieving a large max tile.
-		empty * 2.7 +                        // Keep empty cells available for movement.
-		smoothScore(board) * 0.1 +           // Minor penalty for rough adjacent value differences.
-		monotonicityScore(board) * 1.0 +     // Reward rows/columns that trend monotonically.
-		mergeable * 1.0 +                    // Reward boards with many potential future merges.
-		(maxAtCorner ? 10 : 0)               // Bonus when the largest tile is anchored in a corner.
+		weightSum * 1.2 +
+		Math.log2(maxTile) * 2.7 +
+		empty * 2.7 +
+		smoothScore(board) * 0.5 +
+		monotonicityScore(board) * 1.5 +
+		mergeable * 1.5 +
+		snake * 2.0 +
+		cornerQuality +
+		(maxAtCorner ? 10 : 0)
 	);
 }
 
