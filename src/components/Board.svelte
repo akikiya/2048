@@ -38,6 +38,7 @@
   function onTouchEnd(e: TouchEvent) {
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
+    // 24 px dead-zone avoids registering tiny finger jitters as moves.
     if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
     if (Math.abs(dx) > Math.abs(dy)) {
       onmove?.(dx > 0 ? 'right' : 'left');
@@ -99,6 +100,7 @@
     padding: calc(var(--gap) * 1);
     --gap: 12px;
     aspect-ratio: 1 / 1;
+    /* Prevent mobile browser gestures (scroll/zoom) from interfering with swipes. */
     touch-action: none;
     user-select: none;
   }

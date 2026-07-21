@@ -1,5 +1,6 @@
 import type { Direction } from '../game/game';
 
+// Map both arrow keys and WASD (lowercase and uppercase) to unified directions.
 const KEY_MAP: Record<string, Direction> = {
   ArrowUp: 'up',
   ArrowDown: 'down',

@@ -3,6 +3,7 @@ import { move, getEmptyCells, type Direction, type MoveResult } from '../game';
 const DIRECTIONS: Direction[] = ['up', 'down', 'left', 'right'];
 
 function buildWeightMatrix(size: number): number[][] {
+	// Higher weights toward the bottom-right corner encourage the AI to build large tiles there.
 	const matrix: number[][] = [];
 	for (let row = 0; row < size; row++) {
 		const matrixRow: number[] = [];
@@ -36,6 +37,7 @@ function syncSize(board: number[][]) {
 }
 
 function boardKey(board: number[][]): string {
+	// Serialize board state to a string for memoization in expectimax.
 	let key = '';
 	for (let r = 0; r < board.length; r++) {
 		for (let c = 0; c < board.length; c++) {
@@ -57,6 +59,7 @@ function smoothScore(board: number[][]): number {
 			const value = board[row][col];
 			if (value === 0) continue;
 			const log = log2(value);
+			// Penalize adjacent tiles with large log-value differences (rough board surface).
 			if (row > 0 && board[row - 1][col] !== 0)
 				score -= Math.abs(log - log2(board[row - 1][col]));
 			if (col < n - 1 && board[row][col + 1] !== 0)
@@ -70,6 +73,7 @@ function monotonicityScore(board: number[][]): number {
 	const n = board.length;
 	let totals = [0, 0, 0, 0];
 
+	// Measure monotonicity in all four directions; lower penalty = more monotonic.
 	for (let row = 0; row < n; row++) {
 		for (let col = 0; col < n - 1; col++) {
 			const current = board[row][col] ? log2(board[row][col]) : 0;
@@ -94,6 +98,7 @@ function monotonicityScore(board: number[][]): number {
 function countMergeable(board: number[][]): number {
 	const n = board.length;
 	let count = 0;
+	// Count pairs of adjacent equal tiles as potential future merges.
 	for (let row = 0; row < n; row++) {
 		for (let col = 0; col < n; col++) {
 			const value = board[row][col];
@@ -135,13 +140,13 @@ function evaluate(board: number[][]): number {
 	const mergeable = countMergeable(board);
 
 	return (
-		weightSum * 1.0 +
-		Math.log2(maxTile) * 2.7 +
-		empty * 2.7 +
-		smoothScore(board) * 0.1 +
-		monotonicityScore(board) * 1.0 +
-		mergeable * 1.0 +
-		(maxAtCorner ? 10 : 0)
+		weightSum * 1.0 +                    // Favor high-value tiles in high-weight cells (bottom-right).
+		Math.log2(maxTile) * 2.7 +          // Strongly reward achieving a large max tile.
+		empty * 2.7 +                        // Keep empty cells available for movement.
+		smoothScore(board) * 0.1 +           // Minor penalty for rough adjacent value differences.
+		monotonicityScore(board) * 1.0 +     // Reward rows/columns that trend monotonically.
+		mergeable * 1.0 +                    // Reward boards with many potential future merges.
+		(maxAtCorner ? 10 : 0)               // Bonus when the largest tile is anchored in a corner.
 	);
 }
 
@@ -158,6 +163,7 @@ function expectimax(
 ): number {
 	const key = boardKey(board);
 	if (depth === 0) {
+		// Leaf node: return cached evaluation or compute and cache it.
 		let cached = state.cache.get(key);
 		if (cached === undefined) {
 			cached = evaluate(board);
@@ -166,6 +172,7 @@ function expectimax(
 		return cached;
 	}
 
+	// Return cached intermediate result to prune redundant recursion.
 	const cached = state.cache.get(key);
 	if (cached !== undefined) return cached;
 
@@ -176,6 +183,7 @@ function expectimax(
 		if (empty.length === 0) {
 			result = evaluate(board);
 		} else {
+			// Expectation over all possible spawns: 90% for 2, 10% for 4.
 			let total = 0;
 			const cellProb = 1 / empty.length;
 			for (const { row, col } of empty) {
@@ -199,6 +207,7 @@ function expectimax(
 			const value = expectimax(state, m.board, depth - 1, true);
 			if (value > best) best = value;
 		}
+		// Large negative penalty distinguishes terminal no-move states from valid scores.
 		if (!anyMove) {
 			result = -state.gameOverPenalty;
 		} else {

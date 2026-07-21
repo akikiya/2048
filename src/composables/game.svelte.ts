@@ -7,25 +7,18 @@ import {
   type Direction,
 } from '../game/game';
 
+// Maps board size to the tile value that constitutes a win.
+// Uses a gentle exponential (2^(size+6)) so the goal grows by 2x per size step,
+// balancing difficulty across 3x3 through 6x6 without becoming impossible.
 function winTarget(size: number): number {
-  switch (size) {
-    case 3:
-      return 512;
-    case 4:
-      return 2048;
-    case 5:
-      return 8192;
-    case 6:
-      return 32768;
-    default:
-      return 2048;
-  }
+  return Math.pow(2, size + 6); // 3→512, 4→2048, 5→4096, 6→8192
 }
 
 function bestKey(size: number): string {
   return `2048-best-${size}`;
 }
 
+// Migrate the old single-best-score key into the new per-size schema on first load.
 const LEGACY_BEST_KEY = '2048-best';
 const legacyBest = localStorage.getItem(LEGACY_BEST_KEY);
 if (legacyBest !== null && localStorage.getItem(bestKey(4)) === null) {
@@ -43,10 +36,12 @@ export function createGame(initialSize = 4) {
   let over = $state(false);
 
   function syncDerived() {
+    // Re-evaluate win/over conditions after every board mutation.
     if (isWin(board, winTarget(size))) won = true;
     if (!hasMoves(board)) over = true;
   }
 
+  // Apply a player move; ignored when the game is already decided.
   function moveTile(direction: Direction) {
     if (over || (won && !keepPlaying)) return;
     const result = move(board, direction);
@@ -82,6 +77,7 @@ export function createGame(initialSize = 4) {
   }
 
   return {
+    // Expose read-only state via getters so callers cannot accidentally reassign internals.
     get size() {
       return size;
     },

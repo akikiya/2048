@@ -32,6 +32,7 @@
     padding: 4px 8px;
     border: 1px solid var(--border);
     border-radius: 8px;
+    /* color-mix blends the cell background with transparency for a subtle container tint. */
     background: color-mix(in srgb, var(--cell-bg) 35%, transparent);
   }
 

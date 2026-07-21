@@ -13,6 +13,7 @@ export interface AiResponse {
 	direction: Direction | null;
 }
 
+// Runs the expectimax search off the main thread to keep the UI responsive.
 self.onmessage = (e: MessageEvent<AiRequest>) => {
 	const { id, board, depth } = e.data;
 	const direction = chooseBestMove(board, depth);

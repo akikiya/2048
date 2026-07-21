@@ -14,6 +14,7 @@
 
 <style>
   .tile {
+    /* Use CSS custom properties for grid placement instead of inline row/col styles. */
     grid-row: calc(var(--r) + 1);
     grid-column: calc(var(--c) + 1);
     display: flex;
@@ -22,6 +23,7 @@
     border-radius: 6px;
     font-weight: 800;
     font-family: var(--mono);
+    /* clamp() scales text responsively; larger tiles shrink font to avoid overflow. */
     font-size: clamp(18px, 7vw, 34px);
     background: var(--t2);
     color: var(--tile-text);

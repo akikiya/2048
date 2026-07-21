@@ -11,11 +11,13 @@ import {
 	type Direction,
 } from './game';
 
+// Helper: deep-clone a board so mutations in tests don't leak.
 function setBoard(rows: number[][]): number[][] {
 	return rows.map((r) => [...r]);
 }
 
 function countFilled(board: number[][]): number {
+	// Count non-empty cells to verify spawn/move invariants.
 	return board.flat().filter((v) => v !== 0).length;
 }
 

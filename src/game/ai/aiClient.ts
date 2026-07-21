@@ -4,6 +4,7 @@ import type { AiRequest, AiResponse } from './ai.worker';
 
 type Pending = (direction: Direction | null) => void;
 
+// Lazy-init singleton worker with request-correlation via incrementing IDs.
 let worker: Worker | null = null;
 let nextId = 0;
 const pending = new Map<number, Pending>();
@@ -24,6 +25,7 @@ function getWorker(): Worker | null {
 		pending.delete(e.data.id);
 		resolve(e.data.direction);
 	};
+	// Reject all pending requests on worker error to avoid hanging promises.
 	worker.onerror = () => {
 		for (const resolve of pending.values()) resolve(null);
 		pending.clear();
@@ -35,6 +37,7 @@ export function requestBestMove(
 	board: number[][],
 	depth: number
 ): Promise<Direction | null> {
+	// Fallback to main-thread evaluation when Web Workers are unavailable.
 	if (!supportsWorker()) {
 		return Promise.resolve(chooseBestMove(board, depth));
 	}

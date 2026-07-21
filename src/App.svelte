@@ -14,15 +14,8 @@
   const ai = useAI(game);
   const keyboard = useKeyboard((direction) => game.moveTile(direction));
 
-  const target = $derived(
-    game.size === 3
-      ? 512
-      : game.size === 4
-        ? 2048
-        : game.size === 5
-          ? 8192
-          : 32768
-  );
+  // Target tile grows by 2x per board size to keep difficulty balanced.
+  const target = $derived(Math.pow(2, game.size + 6));
 </script>
 
 <svelte:window onkeydown={keyboard.handle} />

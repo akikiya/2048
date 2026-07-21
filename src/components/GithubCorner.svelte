@@ -21,12 +21,14 @@
   {href}
   aria-label={label}
   target="_blank"
+  // Prevent reverse-tabnabbing by stripping the opener reference on external links.
   rel="noopener noreferrer"
 >
   <svg
     width={size}
     height={size}
     viewBox="0 0 250 250"
+    // Flip the octocat horizontally so it faces the top-right corner.
     style="fill:{fill}; color:{color}; position: absolute; top: 0; border: 0; left: 0; transform: scale(-1, 1);"
     aria-hidden="true"
   >

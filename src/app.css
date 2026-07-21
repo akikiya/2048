@@ -44,6 +44,7 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Dark-mode palette overrides via prefers-color-scheme. */
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #16171d;
@@ -138,11 +139,12 @@ h1 {
   }
 }
 
-.controls .ai-toggle {
-  &.running {
-    background: #c0392b;
-    &:hover {
-      background: #a93226;
+  .controls .ai-toggle {
+    &.running {
+      /* Explicit red when AI is active to signal "stop" semantics. */
+      background: #c0392b;
+      &:hover {
+        background: #a93226;
+      }
     }
   }
-}

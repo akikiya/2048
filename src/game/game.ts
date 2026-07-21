@@ -36,11 +36,12 @@ export function getEmptyCells(board: number[][]): Position[] {
 }
 
 export function spawnTile(board: number[][]): Position | null {
-	const empty = getEmptyCells(board);
-	if (empty.length === 0) return null;
-	const { row, col } = empty[Math.floor(Math.random() * empty.length)];
-	board[row][col] = Math.random() < 0.9 ? 2 : 4;
-	return { row, col };
+  const empty = getEmptyCells(board);
+  if (empty.length === 0) return null;
+  // 90% chance of spawning a 2, 10% chance of a 4 — matches original 2048 odds.
+  const { row, col } = empty[Math.floor(Math.random() * empty.length)];
+  board[row][col] = Math.random() < 0.9 ? 2 : 4;
+  return { row, col };
 }
 
 export function createInitialBoard(size: number = SIZE): number[][] {
@@ -74,6 +75,7 @@ function slideAndMergeRow(row: number[]): {
 	let i = 0;
 	let outCol = 0;
 	while (i < filtered.length) {
+		// Merge equal adjacent tiles once per move: [2,2,2,2] -> [4,4,0,0].
 		if (i + 1 < filtered.length && filtered[i] === filtered[i + 1]) {
 			const merged = filtered[i] * 2;
 			result.push(merged);
@@ -107,6 +109,8 @@ export function move(board: number[][], direction: Direction): MoveResult {
 	const n = board.length;
 	const rotations = rotateCount(direction);
 
+	// Normalize all four directions to left-rotations, then rotate the result back.
+	// This lets slideAndMergeRow implement a single direction while move() handles orientation.
 	let working = cloneBoard(board);
 	for (let r = 0; r < rotations; r++) {
 		working = rotateLeft(working);
@@ -121,6 +125,7 @@ export function move(board: number[][], direction: Direction): MoveResult {
 		);
 		newWorking[row] = slid;
 		scoreGained += gained;
+		// Collect merge positions so the UI can animate them (one merge per tile per move).
 		for (const col of mergedCols) {
 			mergedWorking.push({ row, col });
 		}
@@ -134,6 +139,7 @@ export function move(board: number[][], direction: Direction): MoveResult {
 	const moved = !boardsEqual(board, newBoard);
 
 	const totalRotations = (4 - rotations) % 4;
+	// Rotate merged positions back to the original board orientation.
 	const merged = mergedWorking.map((p) => {
 		let { row, col } = p;
 		for (let r = 0; r < totalRotations; r++) {
@@ -161,6 +167,7 @@ function boardsEqual(a: number[][], b: number[][]): boolean {
 }
 
 export function hasMoves(board: number[][]): boolean {
+	// Empty cells always mean a move is possible; otherwise check adjacent equal values.
 	if (getEmptyCells(board).length > 0) return true;
 	const n = board.length;
 	for (let row = 0; row < n; row++) {
