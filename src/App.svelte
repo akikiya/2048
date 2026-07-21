@@ -7,6 +7,7 @@
   import { createGame } from './composables/game.svelte';
   import { useAI } from './composables/useAI.svelte';
   import { useKeyboard } from './composables/useKeyboard.svelte';
+  import { winTarget } from './composables/game.svelte';
 
   const SIZES = [3, 4, 5, 6];
 
@@ -14,8 +15,8 @@
   const ai = useAI(game);
   const keyboard = useKeyboard((direction) => game.moveTile(direction));
 
-  // Target tile grows by 2x per board size to keep difficulty balanced.
-  const target = $derived(Math.pow(2, game.size + 6));
+  // Win targets per board size: 3→512, 4→2048, 5→4096, 6→8129.
+  const target = $derived(winTarget(game.size));
 </script>
 
 <svelte:window onkeydown={keyboard.handle} />

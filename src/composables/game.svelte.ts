@@ -8,10 +8,15 @@ import {
 } from '../game/game';
 
 // Maps board size to the tile value that constitutes a win.
-// Uses a gentle exponential (2^(size+6)) so the goal grows by 2x per size step,
-// balancing difficulty across 3x3 through 6x6 without becoming impossible.
-function winTarget(size: number): number {
-  return Math.pow(2, size + 6); // 3→512, 4→2048, 5→4096, 6→8192
+// Targets: 3→512, 4→2048, 5→4096, 6→8129.
+export function winTarget(size: number): number {
+  switch (size) {
+    case 3: return 512;
+    case 4: return 2048;
+    case 5: return 4096;
+    case 6: return 8129;
+    default: return 2048;
+  }
 }
 
 function bestKey(size: number): string {
