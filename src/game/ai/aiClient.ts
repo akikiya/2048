@@ -9,10 +9,28 @@ let worker: Worker | null = null;
 let nextId = 0;
 const pending = new Map<number, Pending>();
 
+/**
+ * Feature-detect whether the current environment provides Web Worker support.
+ *
+ * Not every environment provides Web Worker support (e.g., some SSR or older browsers).
+ * This guard avoids throwing at module import time and lets the AI degrade gracefully to
+ * a synchronous main-thread fallback.
+ *
+ * @returns `true` if `Worker` is available.
+ */
 function supportsWorker(): boolean {
 	return typeof Worker !== 'undefined';
 }
 
+/**
+ * Lazily initialize and return the singleton AI worker.
+ *
+ * Using a singleton avoids spawning redundant threads if multiple components request AI
+ * moves concurrently. The module URL resolution via `import.meta.url` is required because
+ * relative paths in `new Worker()` are resolved from the HTML page, not the module file.
+ *
+ * @returns The singleton worker, or `null` if workers are unsupported.
+ */
 function getWorker(): Worker | null {
 	if (!supportsWorker()) return null;
 	if (worker) return worker;
@@ -33,11 +51,24 @@ function getWorker(): Worker | null {
 	return worker;
 }
 
+/**
+ * Dispatch an AI move request to the background worker (or main-thread fallback).
+ *
+ * Deep-clones the board before posting so worker mutation cannot affect the caller's
+ * reactive state. Shared memory (`Transferable`) is not used here because the board is
+ * small enough that `structuredClone` overhead is negligible relative to expectimax cost.
+ *
+ * Correlation IDs let many in-flight requests coexist without ordering constraints; the
+ * worker replies with the same ID so we can resolve the correct Promise.
+ *
+ * @param board - The current board snapshot.
+ * @param depth - Maximum expectimax search depth.
+ * @returns A promise that resolves to the best direction, or `null` if unavailable.
+ */
 export function requestBestMove(
 	board: number[][],
 	depth: number
 ): Promise<Direction | null> {
-	// Fallback to main-thread evaluation when Web Workers are unavailable.
 	if (!supportsWorker()) {
 		return Promise.resolve(chooseBestMove(board, depth));
 	}
