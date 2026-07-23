@@ -42,9 +42,11 @@
     <AISettings
       speed={ai.speed}
       depth={ai.depth}
+      autoDepth={ai.autoDepth}
       disabled={ai.running}
       onspeedchange={(v) => (ai.speed = v)}
       ondepthchange={(v) => (ai.depth = v)}
+      onautodepthchange={(v) => (ai.autoDepth = v)}
     />
   </div>
 

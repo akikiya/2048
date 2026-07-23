@@ -1,3 +1,4 @@
+import { computeAutoDepth } from '../game/ai/ai';
 import { requestBestMove } from '../game/ai/aiClient';
 import type { Game } from './game.svelte';
 
@@ -14,6 +15,7 @@ export function useAI(game: Game) {
 	let running = $state(false);
 	let speed = $state(120);
 	let depth = $state(3);
+	let autoDepth = $state(false);
 
 	let timer: ReturnType<typeof setTimeout> | null = null;
 	/**
@@ -23,6 +25,20 @@ export function useAI(game: Game) {
 	 * themselves if their sequence token is no longer current, preventing ghost moves.
 	 */
 	let seq = 0;
+
+	/**
+	 * Resolve the depth to pass to the search engine.
+	 *
+	 * When `autoDepth` is enabled the value is derived from the current board occupancy
+	 * so the AI spends more time in late-game positions and less time when the board is
+	 * wide open. Otherwise the user-selected static depth is used.
+	 *
+	 * @returns The expectimax search depth for this step.
+	 */
+	function resolveDepth(): number {
+		if (autoDepth) return computeAutoDepth(game.board);
+		return depth;
+	}
 
 	/**
 	 * Execute one AI move and schedule the next if still running.
@@ -38,7 +54,7 @@ export function useAI(game: Game) {
 			running = false;
 			return;
 		}
-		const direction = await requestBestMove(game.board, depth);
+		const direction = await requestBestMove(game.board, resolveDepth());
 		if (current !== seq || !running) return;
 		if (!direction) {
 			running = false;
@@ -95,6 +111,12 @@ export function useAI(game: Game) {
 		},
 		set depth(value: number) {
 			depth = value;
+		},
+		get autoDepth() {
+			return autoDepth;
+		},
+		set autoDepth(value: boolean) {
+			autoDepth = value;
 		},
 		toggle,
 		stop,

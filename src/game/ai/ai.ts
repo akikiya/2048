@@ -417,6 +417,28 @@ export function chooseBestMove(board: number[][], depth: number = 3): Direction 
 	return bestDirection;
 }
 
+/**
+ * Compute an expectimax search depth from the current board occupancy.
+ *
+ * The function maps empty-cell density to a depth between 2 and 6. When the board is
+ * mostly empty the search stays shallow to keep the UI responsive; as space dwindles the
+ * AI invests more computation because the branching factor naturally drops and late-game
+ * decisions matter more.
+ *
+ * @param board - The current board state.
+ * @returns A search depth between 2 and 6 (inclusive).
+ */
+export function computeAutoDepth(board: number[][]): number {
+	const empty = getEmptyCells(board).length;
+	const total = board.length * board.length;
+	const ratio = empty / total;
+	if (ratio > 0.7) return 2;
+	if (ratio > 0.5) return 3;
+	if (ratio > 0.3) return 4;
+	if (ratio > 0.1) return 5;
+	return 6;
+}
+
 export { boardKey, evaluate };
 export {
 	buildWeightMatrix,
