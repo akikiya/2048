@@ -294,7 +294,7 @@ function evaluate(board: number[][]): number {
 
 	return (
 		weightSum * 1.2 +
-		Math.log2(maxTile) * 2.7 +
+		(maxTile > 0 ? Math.log2(maxTile) * 2.7 : 0) +
 		empty * 2.7 +
 		smoothScore(board) * 0.5 +
 		monotonicityScore(board) * 1.5 +
@@ -416,3 +416,16 @@ export function chooseBestMove(board: number[][], depth: number = 3): Direction 
 	}
 	return bestDirection;
 }
+
+export { boardKey, evaluate };
+export {
+	buildWeightMatrix,
+	syncSize,
+	log2,
+	smoothScore,
+	monotonicityScore,
+	countMergeable,
+	snakeScore,
+	cornerQualityScore,
+	expectimax,
+};
