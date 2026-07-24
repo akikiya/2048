@@ -35,11 +35,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build
-        run: npm run build
+        run: pnpm build --base /
       - name: Deploy to xmit.co
         env:
           XMIT_KEY: ${{ secrets.XMIT_KEY }}
         run: pnpx @xmit.co/xmit 2048board.xmit.dev@210 ./dist
+      - name: Build
+        run: pnpm build --base /2048/
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
       - name: Upload artifact
