@@ -1,92 +1,113 @@
+/**
+ * Allowed move directions for a tile shift in the 2048 grid.
+ */
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
+/**
+ * Zero-based coordinate within the game board.
+ */
 export interface Position {
+	/** Row index (0-based). */
 	row: number;
+	/** Column index (0-based). */
 	col: number;
 }
 
+/**
+ * Outcome of evaluating a potential move on the board.
+ */
 export interface MoveResult {
-	board: number[][];
+	/** Board state after applying the move. */
+	board: Uint32Array;
+	/** Whether the board actually changed after the move. */
 	moved: boolean;
+	/** Score gained from merged tiles during this move. */
 	scoreGained: number;
+	/** Positions of tiles that were created by a merge in this move. */
 	merged: Position[];
 }
 
-const SIZE = 4;
 const EMPTY = 0;
 
 /**
- * Produce a fresh `size × size` grid filled with empty values.
+ * Creates a flat {@link Uint32Array} representing an empty square board.
  *
- * This is a pure utility; all callers are responsible for deep-copying if they intend to
- * mutate in place.
+ * Uses a row-major layout: the element at index `row * size + col` holds the
+ * value of that cell. A value of `0` represents an empty cell.
  *
- * @param size - Side length of the board (default 4).
- * @returns A 2-D array of zeros.
+ * @param size - Width and height of the board (default `4`).
+ * @returns A new zero-filled board of length `size * size`.
+ *
+ * @example
+ * ```ts
+ * const board = createEmptyBoard(4); // Uint32Array(16) filled with 0
+ * ```
  */
-export function createEmptyBoard(size: number = SIZE): number[][] {
-	return Array.from({ length: size }, () => Array<number>(size).fill(EMPTY));
+export function createEmptyBoard(size: number = 4): Uint32Array {
+	return new Uint32Array(size * size);
 }
 
 /**
- * Return a structurally new board by shallow-copying every row array.
+ * Returns a shallow copy of the given flat board.
  *
- * We avoid `structuredClone` here because it is slower for small 2-D arrays and does not
- * buy us any extra safety inside this module.
- *
- * @param board - The board to clone.
- * @returns A deep copy of the board.
+ * @param board - Source board to duplicate.
+ * @returns A new {@link Uint32Array} with identical values.
  */
-function cloneBoard(board: number[][]): number[][] {
-	return board.map((row) => [...row]);
+function cloneBoard(board: Uint32Array): Uint32Array {
+	return new Uint32Array(board);
 }
 
 /**
- * Collect the positions of all empty cells on the board.
+ * Derives the board dimension from a flat array length.
  *
- * Used by the AI to enumerate spawn options and by `spawnTile` to choose uniformly
- * at random among available squares.
- *
- * @param board - The board to scan.
- * @returns An array of `{ row, col }` positions where the cell value is `0`.
+ * @param board - A flat board whose length is a perfect square.
+ * @returns The width (and height) of the board.
  */
-export function getEmptyCells(board: number[][]): Position[] {
+export function boardSize(board: Uint32Array): number {
+	return Math.sqrt(board.length);
+}
+
+/**
+ * Collects all empty cell positions on the board.
+ *
+ * @param board - Flat board to scan.
+ * @returns An array of {@link Position} objects for every cell whose value is `0`.
+ */
+export function getEmptyCells(board: Uint32Array): Position[] {
+	const n = boardSize(board);
 	const cells: Position[] = [];
-	for (let row = 0; row < board.length; row++) {
-		for (let col = 0; col < board[row].length; col++) {
-			if (board[row][col] === EMPTY) {
-				cells.push({ row, col });
-			}
+	for (let i = 0; i < board.length; i++) {
+		if (board[i] === EMPTY) {
+			cells.push({ row: (i / n) | 0, col: i % n });
 		}
 	}
 	return cells;
 }
 
 /**
- * Spawn a new tile in a random empty cell.
+ * Spawns a new tile (90% chance of `2`, 10% chance of `4`) in a random empty cell.
  *
- * 90% chance of spawning a `2`, 10% chance of a `4` — matches original 2048 odds.
- * Random uniform selection over the empty list means the low-tile bias applies to
- * position rather than value, preserving fair spawn distribution on asymmetric boards.
+ * Mutates the board in place.
  *
- * @param board - The board to mutate in place.
- * @returns The spawn position, or `null` if the board is full.
+ * @param board - Flat board to modify. Must have at least one empty cell.
+ * @returns The {@link Position} of the newly spawned tile, or `null` if the board is full.
  */
-export function spawnTile(board: number[][]): Position | null {
+export function spawnTile(board: Uint32Array): Position | null {
+	const n = boardSize(board);
 	const empty = getEmptyCells(board);
 	if (empty.length === 0) return null;
 	const { row, col } = empty[Math.floor(Math.random() * empty.length)];
-	board[row][col] = Math.random() < 0.9 ? 2 : 4;
+	board[row * n + col] = Math.random() < 0.9 ? 2 : 4;
 	return { row, col };
 }
 
 /**
- * Create a new board with two randomly spawned tiles.
+ * Creates a fresh board with two randomly spawned tiles, matching the standard game start.
  *
- * @param size - Side length of the board (default 4).
- * @returns A 2-D board array with exactly two non-empty tiles.
+ * @param size - Width and height of the board (default `4`).
+ * @returns A flat {@link Uint32Array} with two tiles already placed.
  */
-export function createInitialBoard(size: number = SIZE): number[][] {
+export function createInitialBoard(size: number = 4): Uint32Array {
 	const board = createEmptyBoard(size);
 	spawnTile(board);
 	spawnTile(board);
@@ -94,34 +115,48 @@ export function createInitialBoard(size: number = SIZE): number[][] {
 }
 
 /**
- * Rotate the board 90° counter-clockwise.
+ * Rotates a flat board 90 degrees counter-clockwise.
  *
- * This normalization lets a single left-slide implementation be reused for all four input
- * directions, avoiding branching logic in `slideAndMergeRow`.
+ * Used internally to unify all four move directions into a single left-slide
+ * implementation.
  *
- * @param board - The board to rotate.
- * @returns A new board rotated counter-clockwise.
+ * @param board - Flat board to rotate.
+ * @returns A new flat board rotated 90° CCW.
  */
-function rotateLeft(board: number[][]): number[][] {
-	const n = board.length;
-	const rotated: number[][] = createEmptyBoard(n);
+function rotateLeft(board: Uint32Array): Uint32Array {
+	const n = boardSize(board);
+	const rotated = new Uint32Array(n * n);
 	for (let row = 0; row < n; row++) {
 		for (let col = 0; col < n; col++) {
-			rotated[n - 1 - col][row] = board[row][col];
+			rotated[(n - 1 - col) * n + row] = board[row * n + col];
 		}
 	}
 	return rotated;
 }
 
 /**
- * Slide and merge a single row toward index 0 (left).
+ * Extracts a single row from a flat board as a numeric array.
  *
- * Equal adjacent tiles merge once per move: `[2, 2, 2, 2]` → `[4, 4, 0, 0]`.
- * Tiles never skip over empty space after a merge; they stop at the first non-equal
- * neighbor or board edge.
+ * @param board - Source flat board.
+ * @param row - Zero-based row index to extract.
+ * @param n - Board dimension (width / height).
+ * @returns An array of length `n` containing the row's values.
+ */
+function rowValues(board: Uint32Array, row: number, n: number): number[] {
+	const start = row * n;
+	const vals: number[] = [];
+	for (let i = 0; i < n; i++) vals.push(board[start + i]);
+	return vals;
+}
+
+/**
+ * Slides non-empty tiles in a row toward the start, merging matching adjacent values.
  *
- * @param row - A single row of tile values.
- * @returns The slid row, the score gained from merges, and the output columns where merges occurred.
+ * Implements the classic 2048 merge rule: two equal tiles merge into their sum,
+ * and a tile can only merge once per move.
+ *
+ * @param row - Row values (length determines the board size).
+ * @returns The slid row, the score gained from merges, and the output column indices where merges occurred.
  */
 function slideAndMergeRow(row: number[]): {
 	row: number[];
@@ -153,12 +188,10 @@ function slideAndMergeRow(row: number[]): {
 }
 
 /**
- * Map a direction to the number of left rotations needed to normalize it.
+ * Maps a {@link Direction} to the number of 90° CCW rotations needed to align it with a left slide.
  *
- * Left needs 0, up needs 1, right needs 2, down needs 3.
- *
- * @param direction - The input direction.
- * @returns The number of counter-clockwise 90° rotations to apply.
+ * @param direction - Move direction.
+ * @returns Number of times {@link rotateLeft} must be applied (0–3).
  */
 function rotateCount(direction: Direction): number {
 	switch (direction) {
@@ -174,18 +207,30 @@ function rotateCount(direction: Direction): number {
 }
 
 /**
- * Execute a move in the given direction and return the resulting board state.
+ * Computes the new position after a single 90° CCW rotation.
  *
- * Any direction is translated into a left-slide by rotating the board, applying the slide,
- * then rotating back. This consolidates merge and slide logic into a single codepath and
- * guarantees identical scoring regardless of input orientation.
- *
- * @param board - The current board state.
- * @param direction - The direction to slide.
- * @returns The new board, whether it changed, the score gained, and merge positions for animation.
+ * @param row - Original row index.
+ * @param col - Original column index.
+ * @param n - Board dimension.
+ * @returns Rotated {@link Position}.
  */
-export function move(board: number[][], direction: Direction): MoveResult {
-	const n = board.length;
+function rotateLeftPosition(row: number, col: number, n: number): Position {
+	return { row: n - 1 - col, col: row };
+}
+
+/**
+ * Applies a single move to the board in the given direction.
+ *
+ * Internally rotates the board so the move becomes a left-slide, runs the slide
+ * logic, then rotates the result back. Merge positions are tracked and rotated
+ * accordingly.
+ *
+ * @param board - Flat board to mutate (treated as read-only; a new board is returned).
+ * @param direction - Direction to shift tiles.
+ * @returns A {@link MoveResult} describing the outcome.
+ */
+export function move(board: Uint32Array, direction: Direction): MoveResult {
+	const n = boardSize(board);
 	const rotations = rotateCount(direction);
 
 	let working = cloneBoard(board);
@@ -195,12 +240,14 @@ export function move(board: number[][], direction: Direction): MoveResult {
 
 	let scoreGained = 0;
 	const mergedWorking: Position[] = [];
-	const newWorking: number[][] = createEmptyBoard(n);
+	const newWorking = createEmptyBoard(n);
 	for (let row = 0; row < n; row++) {
-		const { row: slid, scoreGained: gained, mergedCols } = slideAndMergeRow(
-			working[row]
-		);
-		newWorking[row] = slid;
+		const rowData = rowValues(working, row, n);
+		const { row: slid, scoreGained: gained, mergedCols } = slideAndMergeRow(rowData);
+		const offset = row * n;
+		for (let c = 0; c < n; c++) {
+			newWorking[offset + c] = slid[c];
+		}
 		scoreGained += gained;
 		for (const col of mergedCols) {
 			mergedWorking.push({ row, col });
@@ -229,92 +276,63 @@ export function move(board: number[][], direction: Direction): MoveResult {
 }
 
 /**
- * Apply a left-rotation transformation to a single cell coordinate.
- *
- * Used to map merge positions back to the board's original orientation after computing
- * a slide in the rotated frame.
- *
- * @param row - Original row index.
- * @param col - Original column index.
- * @param n - Board side length.
- * @returns The rotated `{ row, col }` position.
- */
-function rotateLeftPosition(row: number, col: number, n: number): Position {
-	return { row: n - 1 - col, col: row };
-}
-
-/**
- * Compare two boards cell-by-cell for equality.
- *
- * Used to determine whether a direction is a no-op move. This is cheaper than generating
- * a `boardKey` and comparing strings for small boards.
+ * Compares two flat boards element-by-element.
  *
  * @param a - First board.
  * @param b - Second board.
- * @returns `true` if every cell matches.
+ * @returns `true` if both boards have identical values at every index.
  */
-function boardsEqual(a: number[][], b: number[][]): boolean {
-	for (let row = 0; row < a.length; row++) {
-		for (let col = 0; col < a[row].length; col++) {
-			if (a[row][col] !== b[row][col]) return false;
-		}
+function boardsEqual(a: Uint32Array, b: Uint32Array): boolean {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		if (a[i] !== b[i]) return false;
 	}
 	return true;
 }
 
 /**
- * Determine whether any legal move exists on the board.
+ * Checks whether any legal moves remain on the board.
  *
- * A move exists if any cell is empty OR if any horizontal/vertical neighbors share a
- * value (so a slide would create a merge). The early return on empty cells avoids an
- * O(n²) scan of adjacent pairs when the board is clearly playable.
+ * A move exists if there is at least one empty cell, or if any two adjacent
+ * cells (horizontally or vertically) share the same value.
  *
- * @param board - The board to evaluate.
- * @returns `true` if at least one move is available.
+ * @param board - Flat board to evaluate.
+ * @returns `true` if the game is not yet over.
  */
-export function hasMoves(board: number[][]): boolean {
+export function hasMoves(board: Uint32Array): boolean {
 	if (getEmptyCells(board).length > 0) return true;
-	const n = board.length;
+	const n = boardSize(board);
 	for (let row = 0; row < n; row++) {
 		for (let col = 0; col < n; col++) {
-			const value = board[row][col];
-			if (col + 1 < n && board[row][col + 1] === value) return true;
-			if (row + 1 < n && board[row + 1][col] === value) return true;
+			const value = board[row * n + col];
+			if (col + 1 < n && board[row * n + col + 1] === value) return true;
+			if (row + 1 < n && board[(row + 1) * n + col] === value) return true;
 		}
 	}
 	return false;
 }
 
 /**
- * Find the maximum tile value on the board.
+ * Finds the highest tile value currently on the board.
  *
- * Used by `isWin` and by the UI to highlight special large tiles. Board values carry no
- * negative state, so initializing to `0` is safe for all starting configurations.
- *
- * @param board - The board to scan.
- * @returns The highest tile value, or `0` if the board is empty.
+ * @param board - Flat board to scan.
+ * @returns The maximum tile value, or `0` if the board is empty.
  */
-export function getHighestTile(board: number[][]): number {
+export function getHighestTile(board: Uint32Array): number {
 	let max = 0;
-	for (const row of board) {
-		for (const value of row) {
-			if (value > max) max = value;
-		}
+	for (let i = 0; i < board.length; i++) {
+		if (board[i] > max) max = board[i];
 	}
 	return max;
 }
 
 /**
- * Check whether the player has reached the win condition.
+ * Determines whether the player has reached (or surpassed) the target tile.
  *
- * The default target is `2048` because tile values double on each merge and the original
- * game defines 2048 as the victory condition. The parameter override lets smaller boards
- * use a proportionally scaled target (see `winTarget` in composables).
- *
- * @param board - The board to evaluate.
- * @param target - The tile value required to win (default 2048).
- * @returns `true` if the highest tile meets or exceeds the target.
+ * @param board - Flat board to evaluate.
+ * @param target - Winning tile value (default `2048`).
+ * @returns `true` if the board contains a tile value greater than or equal to `target`.
  */
-export function isWin(board: number[][], target: number = 2048): boolean {
+export function isWin(board: Uint32Array, target: number = 2048): boolean {
 	return getHighestTile(board) >= target;
 }

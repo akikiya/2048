@@ -11,21 +11,26 @@ import {
 	type Direction,
 } from './game';
 
-// Helper: deep-clone a board so mutations in tests don't leak.
-function setBoard(rows: number[][]): number[][] {
-	return rows.map((r) => [...r]);
+function flatBoard(rows: number[][]): Uint32Array {
+	const n = rows.length;
+	const board = new Uint32Array(n * n);
+	for (let r = 0; r < n; r++) {
+		for (let c = 0; c < n; c++) {
+			board[r * n + c] = rows[r][c];
+		}
+	}
+	return board;
 }
 
-function countFilled(board: number[][]): number {
-	// Count non-empty cells to verify spawn/move invariants.
-	return board.flat().filter((v) => v !== 0).length;
+function cellAt(board: Uint32Array, n: number, row: number, col: number): number {
+	return board[row * n + col];
 }
 
 describe('board helpers', () => {
 	it('creates an empty board of given size', () => {
 		const board = createEmptyBoard(4);
-		expect(board).toHaveLength(4);
-		expect(board.every((r) => r.every((c) => c === 0))).toBe(true);
+		expect(board.length).toBe(16);
+		expect(board.every((v) => v === 0)).toBe(true);
 	});
 
 	it('spawns only 2 or 4', () => {
@@ -33,7 +38,7 @@ describe('board helpers', () => {
 		const pos = spawnTile(board);
 		expect(pos).not.toBeNull();
 		const { row, col } = pos!;
-		expect([2, 4]).toContain(board[row][col]);
+		expect([2, 4]).toContain(cellAt(board, 4, row, col));
 	});
 
 	it('getEmptyCells returns all cells when empty', () => {
@@ -43,49 +48,56 @@ describe('board helpers', () => {
 
 	it('initial board has exactly two tiles', () => {
 		const board = createInitialBoard();
-		const filled = board.flat().filter((v) => v !== 0);
-		expect(filled).toHaveLength(2);
+		let count = 0;
+		for (let i = 0; i < board.length; i++) {
+			if (board[i] !== 0) count++;
+		}
+		expect(count).toBe(2);
 	});
 });
 
 describe('move left', () => {
 	it('slides tiles to the left', () => {
-		const start = setBoard([
+		const start = flatBoard([
 			[0, 2, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 		]);
 		const { board, moved } = move(start, 'left');
-		expect(board[0][0]).toBe(2);
+		expect(cellAt(board, 4, 0, 0)).toBe(2);
 		expect(moved).toBe(true);
 	});
 
 	it('merges equal adjacent tiles once per move', () => {
-		const start = setBoard([
+		const start = flatBoard([
 			[2, 2, 2, 2],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 		]);
 		const { board, scoreGained } = move(start, 'left');
-		expect(board[0]).toEqual([4, 4, 0, 0]);
+		expect(cellAt(board, 4, 0, 0)).toBe(4);
+		expect(cellAt(board, 4, 0, 1)).toBe(4);
+		expect(cellAt(board, 4, 0, 2)).toBe(0);
+		expect(cellAt(board, 4, 0, 3)).toBe(0);
 		expect(scoreGained).toBe(8);
 	});
 
 	it('does not merge a tile more than once', () => {
-		const start = setBoard([
+		const start = flatBoard([
 			[4, 2, 2, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 		]);
 		const { board } = move(start, 'left');
-		expect(board[0]).toEqual([4, 4, 0, 0]);
+		expect(cellAt(board, 4, 0, 0)).toBe(4);
+		expect(cellAt(board, 4, 0, 1)).toBe(4);
 	});
 
 	it('reports no move when nothing changes', () => {
-		const start = setBoard([
+		const start = flatBoard([
 			[2, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
@@ -147,20 +159,20 @@ describe('all directions', () => {
 
 	for (const { dir, from, to } of checks) {
 		it(`moves tiles ${dir}`, () => {
-			const { board } = move(setBoard(from), dir);
-			expect(board).toEqual(to);
+			const { board } = move(flatBoard(from), dir);
+			expect(Array.from(board)).toEqual(to.flat());
 		});
 	}
 
 	it('merges vertically (up)', () => {
-		const start = setBoard([
+		const start = flatBoard([
 			[2, 0, 0, 0],
 			[2, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 		]);
 		const { board, scoreGained } = move(start, 'up');
-		expect(board[0][0]).toBe(4);
+		expect(cellAt(board, 4, 0, 0)).toBe(4);
 		expect(scoreGained).toBe(4);
 	});
 });
@@ -172,7 +184,7 @@ describe('game state', () => {
 	});
 
 	it('detects a mergeable board with no empty cells', () => {
-		const board = setBoard([
+		const board = flatBoard([
 			[2, 2, 4, 8],
 			[4, 8, 16, 32],
 			[2, 4, 8, 16],
@@ -182,7 +194,7 @@ describe('game state', () => {
 	});
 
 	it('detects a full board with no moves', () => {
-		const board = setBoard([
+		const board = flatBoard([
 			[2, 4, 2, 4],
 			[4, 2, 4, 2],
 			[2, 4, 2, 4],
@@ -192,7 +204,7 @@ describe('game state', () => {
 	});
 
 	it('finds the highest tile', () => {
-		const board = setBoard([
+		const board = flatBoard([
 			[2, 0, 0, 0],
 			[0, 8, 0, 0],
 			[0, 0, 0, 0],
@@ -202,7 +214,7 @@ describe('game state', () => {
 	});
 
 	it('detects win at 2048', () => {
-		const board = setBoard([
+		const board = flatBoard([
 			[2048, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
@@ -218,12 +230,16 @@ describe('spawn', () => {
 		const board = createEmptyBoard(4);
 		const pos = spawnTile(board);
 		expect(pos).not.toBeNull();
-		expect(countFilled(board)).toBe(1);
-		expect([2, 4]).toContain(board[pos!.row][pos!.col]);
+		let count = 0;
+		for (let i = 0; i < board.length; i++) {
+			if (board[i] !== 0) count++;
+		}
+		expect(count).toBe(1);
+		expect([2, 4]).toContain(cellAt(board, 4, pos!.row, pos!.col));
 	});
 
 	it('spawnTile returns null on a full board', () => {
-		const board = setBoard([
+		const board = flatBoard([
 			[2, 4, 2, 4],
 			[4, 2, 4, 2],
 			[2, 4, 2, 4],
@@ -233,19 +249,19 @@ describe('spawn', () => {
 	});
 
 	it('move does not mutate the original board', () => {
-		const start = setBoard([
+		const start = flatBoard([
 			[2, 2, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 		]);
-		const snapshot = setBoard(start);
+		const snapshot = new Uint32Array(start);
 		move(start, 'left');
 		expect(start).toEqual(snapshot);
 	});
 
 	it('move + spawn keeps tile count correct', () => {
-		const start = setBoard([
+		const start = flatBoard([
 			[2, 2, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
@@ -253,9 +269,17 @@ describe('spawn', () => {
 		]);
 		const result = move(start, 'left');
 		expect(result.moved).toBe(true);
-		expect(countFilled(result.board)).toBe(1);
+		let count = 0;
+		for (let i = 0; i < result.board.length; i++) {
+			if (result.board[i] !== 0) count++;
+		}
+		expect(count).toBe(1);
 		const spawned = spawnTile(result.board);
 		expect(spawned).not.toBeNull();
-		expect(countFilled(result.board)).toBe(2);
+		count = 0;
+		for (let i = 0; i < result.board.length; i++) {
+			if (result.board[i] !== 0) count++;
+		}
+		expect(count).toBe(2);
 	});
 });

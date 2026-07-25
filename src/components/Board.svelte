@@ -4,10 +4,10 @@
 
 	/** Props accepted by the Board component. */
 	interface Props {
-		/** Current tile values as a 2-D array. */
-		board: number[][];
-		/** Board side length (also used for grid-template CSS variables). */
-		size: number;
+     	/** Current tile values as a flat array (row-major). */
+	    board: Uint32Array;
+	    /** Board side length (also used for grid-template CSS variables). */
+	    size: number;
 		/** Whether the player has reached the win condition. */
 		won?: boolean;
 		/** Whether the game has no remaining moves. */
@@ -92,12 +92,13 @@
 	</div>
 
 	<div class="tiles">
-		{#each board as row, r}
-			{#each row as value, c}
-				{#if value !== 0}
-					<Tile value={value} row={r} col={c} />
-				{/if}
-			{/each}
+		{#each Array(size * size) as _, i}
+			{@const value = board[i]}
+			{#if value !== 0}
+				{@const r = (i / size) | 0}
+				{@const c = i % size}
+				<Tile value={value} row={r} col={c} />
+			{/if}
 		{/each}
 	</div>
 

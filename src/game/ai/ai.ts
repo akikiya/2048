@@ -3,35 +3,30 @@ import { move, getEmptyCells, type Direction, type MoveResult } from '../game';
 const DIRECTIONS: Direction[] = ['up', 'down', 'left', 'right'];
 
 /**
- * Assign exponentially decaying weights radiating from the bottom-right corner.
+ * Builds a weight matrix that rewards tiles placed near the bottom-right corner.
  *
- * This heuristic encourages the AI to preserve large-value tiles in the preferred corner
- * rather than scattering them randomly. The gradient is intentionally steep so that
- * corner-adjacent high tiles receive a dominant positional bonus during evaluation.
+ * This heuristic encourages the AI to keep large values clustered in a corner,
+ * which is a well-known strategy for high scores in 2048.
  *
- * @param size - Side length of the square board.
- * @returns A `size × size` matrix where each cell contains its positional weight.
+ * @param size - Board dimension.
+ * @returns A flat {@link Uint32Array} where values decrease with Manhattan distance from the bottom-right corner.
  */
-function buildWeightMatrix(size: number): number[][] {
-	const matrix: number[][] = [];
+function buildWeightMatrix(size: number): Uint32Array {
+	const matrix = new Uint32Array(size * size);
 	for (let row = 0; row < size; row++) {
-		const matrixRow: number[] = [];
 		for (let col = 0; col < size; col++) {
 			const distance = Math.abs(row - (size - 1)) + Math.abs(col - (size - 1));
-			matrixRow.push(size * size - 1 - distance);
+			matrix[row * size + col] = size * size - 1 - distance;
 		}
-		matrix.push(matrixRow);
 	}
 	return matrix;
 }
 
 /**
- * Return the four corner coordinates for a given board size.
+ * Returns the four corner coordinate pairs for a board of the given size.
  *
- * Caching these avoids recomputing them during every board evaluation.
- *
- * @param size - Side length of the square board.
- * @returns An array of `[row, col]` tuples representing the four corners.
+ * @param size - Board dimension.
+ * @returns Array of `[row, col]` pairs representing the four corners.
  */
 function cornersFor(size: number): [number, number][] {
 	return [
@@ -46,99 +41,90 @@ let weightMatrix = buildWeightMatrix(4);
 let corners = cornersFor(4);
 
 /**
- * Lazily rebuild `weightMatrix` and `corners` when the board dimension changes.
+ * Lazily rebuilds the cached weight matrix and corner list if the board size has changed.
  *
- * The weight matrix and corner cache are lazily rebuilt only when the board dimension
- * changes from the previous evaluation. This avoids needless allocation for every move
- * since most games stay at the same size after the initial configuration.
+ * This allows the same AI heuristics to work on non-standard board sizes (e.g. 3×3)
+ * without re-instantiating the evaluator.
  *
- * @param board - The current game board.
+ * @param board - Flat board whose size determines the required matrix dimensions.
  */
-function syncSize(board: number[][]) {
-	const n = board.length;
-	if (weightMatrix.length !== n) {
+function syncSize(board: Uint32Array) {
+	const n = Math.sqrt(board.length);
+	if (weightMatrix.length !== board.length) {
 		weightMatrix = buildWeightMatrix(n);
 		corners = cornersFor(n);
 	}
 }
 
 /**
- * Serialize a 2-D board into a deterministic string key for memoization.
+ * Serializes a flat board into a comma-separated string key.
  *
- * We explicitly serialize every cell to avoid edge cases where `toString()` on nested
- * arrays might be ambiguous (e.g., zero vs. empty elements).
+ * Used as a memoization key for the expectimax cache.
  *
- * @param board - The board state to serialize.
- * @returns A flat, comma-delimited string uniquely identifying the board configuration.
+ * @param board - Flat board to serialize.
+ * @returns A deterministic string representation of the board state.
  */
-function boardKey(board: number[][]): string {
+function boardKey(board: Uint32Array): string {
 	let key = '';
-	for (let r = 0; r < board.length; r++) {
-		for (let c = 0; c < board.length; c++) {
-			key += board[r][c] + ',';
-		}
+	for (let i = 0; i < board.length; i++) {
+		key += board[i] + ',';
 	}
 	return key;
 }
 
 /**
- * Extract the base-2 logarithm of a tile value.
+ * Computes the base-2 logarithm of a tile value.
  *
- * Using log2 instead of the raw value keeps the heuristic scale-independent — adding one
- * more 2→4 merge has the same informational weight regardless of how large the existing
- * tiles are.
- *
- * @param value - A positive tile value (power of two).
- * @returns The base-2 logarithm of the value.
+ * @param value - Tile value (must be positive).
+ * @returns `log2(value)`.
  */
 function log2(value: number): number {
 	return Math.log2(value);
 }
 
 /**
- * Penalize boards with rough surfaces — adjacent tiles whose log-values differ sharply.
+ * Measures how smoothly tile values transition across adjacent cells.
  *
- * Smoother boards are preferred because they indicate the player is maintaining monotonic
- * stacks, which reduces the risk of getting stuck with isolated high tiles.
+ * Large differences between neighboring tiles reduce the score, penalizing
+ * configurations where high and low values are interleaved.
  *
- * @param board - The current board state.
- * @returns A score where lower values indicate more surface roughness.
+ * @param board - Flat board to evaluate.
+ * @returns A smoothness score (higher is better).
  */
-function smoothScore(board: number[][]): number {
-	const n = board.length;
+function smoothScore(board: Uint32Array): number {
+	const n = Math.sqrt(board.length);
 	let score = 0;
 	for (let row = 0; row < n; row++) {
 		for (let col = 0; col < n; col++) {
-			const value = board[row][col];
+			const value = board[row * n + col];
 			if (value === 0) continue;
 			const log = log2(value);
-			if (row > 0 && board[row - 1][col] !== 0)
-				score -= Math.abs(log - log2(board[row - 1][col]));
-			if (col < n - 1 && board[row][col + 1] !== 0)
-				score -= Math.abs(log - log2(board[row][col + 1]));
+			if (row > 0 && board[(row - 1) * n + col] !== 0)
+				score -= Math.abs(log - log2(board[(row - 1) * n + col]));
+			if (col < n - 1 && board[row * n + col + 1] !== 0)
+				score -= Math.abs(log - log2(board[row * n + col + 1]));
 		}
 	}
 	return score;
 }
 
 /**
- * Measure how monotonically tile values change in all four directions.
+ * Measures how monotonically tile values increase or decrease along rows and columns.
  *
- * Monotonic boards (values consistently increasing or decreasing along rows/columns)
- * are easier to navigate and merge. We sum the best horizontal and best vertical
- * monotonicity, so lower penalties mean more ordered boards.
+ * A monotonic board (values always rise or always fall along a row/column) is
+ * easier to merge, so higher scores indicate more manageable layouts.
  *
- * @param board - The current board state.
- * @returns A non-negative penalty; 0 means perfectly monotonic in both axes.
+ * @param board - Flat board to evaluate.
+ * @returns A monotonicity score (higher is better).
  */
-function monotonicityScore(board: number[][]): number {
-	const n = board.length;
+function monotonicityScore(board: Uint32Array): number {
+	const n = Math.sqrt(board.length);
 	let totals = [0, 0, 0, 0];
 
 	for (let row = 0; row < n; row++) {
 		for (let col = 0; col < n - 1; col++) {
-			const current = board[row][col] ? log2(board[row][col]) : 0;
-			const next = board[row][col + 1] ? log2(board[row][col + 1]) : 0;
+			const current = board[row * n + col] ? log2(board[row * n + col]) : 0;
+			const next = board[row * n + col + 1] ? log2(board[row * n + col + 1]) : 0;
 			if (current > next) totals[0] += next - current;
 			else totals[1] += current - next;
 		}
@@ -146,8 +132,8 @@ function monotonicityScore(board: number[][]): number {
 
 	for (let col = 0; col < n; col++) {
 		for (let row = 0; row < n - 1; row++) {
-			const current = board[row][col] ? log2(board[row][col]) : 0;
-			const next = board[row + 1][col] ? log2(board[row + 1][col]) : 0;
+			const current = board[row * n + col] ? log2(board[row * n + col]) : 0;
+			const next = board[(row + 1) * n + col] ? log2(board[(row + 1) * n + col]) : 0;
 			if (current > next) totals[2] += next - current;
 			else totals[3] += current - next;
 		}
@@ -157,48 +143,44 @@ function monotonicityScore(board: number[][]): number {
 }
 
 /**
- * Count adjacent pairs of equal tiles as potential future merges.
+ * Counts pairs of adjacent equal-value tiles that could be merged in one move.
  *
- * This rewards boards where the current state already has fertile ground for the next
- * slide, because even immobile equal neighbors indicate the player is close to freeing
- * space or scoring.
- *
- * @param board - The current board state.
- * @returns The number of horizontally or vertically adjacent equal pairs.
+ * @param board - Flat board to evaluate.
+ * @returns The number of horizontally or vertically adjacent matching pairs.
  */
-function countMergeable(board: number[][]): number {
-	const n = board.length;
+function countMergeable(board: Uint32Array): number {
+	const n = Math.sqrt(board.length);
 	let count = 0;
 	for (let row = 0; row < n; row++) {
 		for (let col = 0; col < n; col++) {
-			const value = board[row][col];
+			const value = board[row * n + col];
 			if (value === 0) continue;
-			if (col + 1 < n && board[row][col + 1] === value) count++;
-			if (row + 1 < n && board[row + 1][col] === value) count++;
+			if (col + 1 < n && board[row * n + col + 1] === value) count++;
+			if (row + 1 < n && board[(row + 1) * n + col] === value) count++;
 		}
 	}
 	return count;
 }
 
 /**
- * Reward the classic snake/winding stacking pattern.
+ * Awards points when tiles follow a "snake" ordering (zig-zag descending).
  *
- * Tiles should generally decrease along a serpentine path from the anchor corner. This
- * encourages the structured stacking that human players use to reach high tiles.
+ * The snake pattern keeps the largest tile in a corner with descending values
+ * weaving toward the opposite corner.
  *
- * @param board - The current board state.
- * @returns A score; higher values indicate a stronger snake pattern.
+ * @param board - Flat board to evaluate.
+ * @returns A snake-sequencing score (higher is better).
  */
-function snakeScore(board: number[][]): number {
-	const n = board.length;
+function snakeScore(board: Uint32Array): number {
+	const n = Math.sqrt(board.length);
 	let score = 0;
 	for (let row = 0; row < n; row++) {
 		const evenRow = row % 2 === 0;
 		for (let col = 0; col < n - 1; col++) {
 			const c1 = evenRow ? col : n - 1 - col;
 			const c2 = evenRow ? col + 1 : n - 1 - (col + 1);
-			const v1 = board[row][c1] ? log2(board[row][c1]) : 0;
-			const v2 = board[row][c2] ? log2(board[row][c2]) : 0;
+			const v1 = board[row * n + c1] ? log2(board[row * n + c1]) : 0;
+			const v2 = board[row * n + c2] ? log2(board[row * n + c2]) : 0;
 			if (v1 >= v2) score += (v1 - v2) * 0.5;
 			else score -= (v2 - v1);
 		}
@@ -207,19 +189,19 @@ function snakeScore(board: number[][]): number {
 }
 
 /**
- * Quantify how well the largest tiles are anchored in corners or edges.
+ * Evaluates whether the largest tiles are anchored in corners and aligned on edges.
  *
- * Strongly prefers corners, moderately prefers same-edge adjacency, and penalizes the
- * center. This heuristic directly counters the AI's tendency to scatter high tiles.
+ * Rewards configurations where the highest-value tiles occupy corner cells and
+ * lie along the same edge or adjacent corners.
  *
- * @param board - The current board state.
- * @returns A score; higher values indicate better corner anchoring.
+ * @param board - Flat board to evaluate.
+ * @returns A corner-quality score (higher is better).
  */
-function cornerQualityScore(board: number[][]): number {
-	const n = board.length;
+function cornerQualityScore(board: Uint32Array): number {
+	const n = Math.sqrt(board.length);
 	const positions: { r: number; c: number; val: number }[] = corners
-		.map(([r, c]) => ({ r, c, val: board[r][c] }))
-		.filter(p => p.val > 0)
+		.map(([r, c]) => ({ r, c, val: board[r * n + c] }))
+		.filter((p) => p.val > 0)
 		.sort((a, b) => b.val - a.val);
 
 	if (positions.length === 0) return 0;
@@ -228,7 +210,7 @@ function cornerQualityScore(board: number[][]): number {
 	const maxVal = positions[0].val;
 
 	for (const [r, c] of corners) {
-		if (board[r][c] === maxVal) {
+		if (board[r * n + c] === maxVal && maxVal !== 0) {
 			score += 50;
 			break;
 		}
@@ -250,39 +232,44 @@ function cornerQualityScore(board: number[][]): number {
 }
 
 /**
- * Aggregate every positional heuristic into a single scalar evaluation.
+ * Computes a heuristic evaluation score for the current board state.
  *
- * The weights were chosen empirically to balance long-term corner discipline (weight sum,
- * snake, corner quality) against short-term mobility (empty cells, mergeable pairs,
- * smoothness). Adjusting these coefficients changes the AI's risk preference: higher
- * empty/monotonicity weight makes it more defensive, while higher max-tile weight makes
- * it more aggressive.
+ * Combines multiple weighted features:
+ * - Corner-weighted tile values
+ * - Maximum tile logarithm
+ * - Empty cell count
+ * - Smoothness
+ * - Monotonicity
+ * - Mergeable pair count
+ * - Snake ordering
+ * - Corner quality
  *
- * @param board - The current board state.
- * @returns A scalar score representing the board's strategic quality.
+ * @param board - Flat board to evaluate.
+ * @returns A numeric score where higher values indicate stronger positions.
  */
-function evaluate(board: number[][]): number {
+function evaluate(board: Uint32Array): number {
 	syncSize(board);
-	const n = board.length;
+	const n = Math.sqrt(board.length);
 	let empty = 0;
 	let weightSum = 0;
 	let maxTile = 0;
 	let maxAtCorner = false;
 
 	for (let row = 0; row < n; row++) {
+		const rowOffset = row * n;
 		for (let col = 0; col < n; col++) {
-			const value = board[row][col];
+			const value = board[rowOffset + col];
 			if (value === 0) {
 				empty++;
 			} else {
-				weightSum += log2(value) * weightMatrix[row][col];
+				weightSum += log2(value) * weightMatrix[rowOffset + col];
 				if (value > maxTile) maxTile = value;
 			}
 		}
 	}
 
 	for (const [r, c] of corners) {
-		if (board[r][c] === maxTile && maxTile !== 0) {
+		if (board[r * n + c] === maxTile && maxTile !== 0) {
 			maxAtCorner = true;
 			break;
 		}
@@ -305,28 +292,32 @@ function evaluate(board: number[][]): number {
 	);
 }
 
+/**
+ * Mutable search context shared across expectimax recursions.
+ */
 interface SearchState {
+	/** Cached board-evaluation scores keyed by {@link boardKey} serialization. */
 	cache: Map<string, number>;
+	/** Penalty applied when no moves remain (game over). */
 	gameOverPenalty: number;
 }
 
 /**
- * Recursive expectimax search over the game tree.
+ * Recursively evaluates board states using the expectimax algorithm.
  *
- * At max (player-turn) nodes we choose the direction with the highest expected score; at
- * chance (spawn) nodes we average over all legal random spawns using the original 2048
- * odds (90% for 2, 10% for 4). A shared `state.cache` memoizes already-seen board
- * configurations to prune duplicate subtrees.
+ * Alternates between the player's turn (maximize over all legal moves) and the
+ * chance turn (expected value over random tile spawns: 90% `2`, 10% `4`).
+ * Leaf nodes are scored with {@link evaluate}. Results are memoized in `state.cache`.
  *
- * @param state - Shared search state carrying the memoization cache and terminal penalty.
- * @param board - The current board state to evaluate.
- * @param depth - Remaining search depth.
- * @param isChance - `true` if this node represents a random spawn event.
- * @returns The expected board evaluation from this state.
+ * @param state - Shared search context containing the memoization cache.
+ * @param board - Flat board to evaluate.
+ * @param depth - Remaining search depth before falling back to the heuristic.
+ * @param isChance - `true` if the next event is a random tile spawn; `false` for the player's turn.
+ * @returns The expected evaluation score from this state.
  */
 function expectimax(
 	state: SearchState,
-	board: number[][],
+	board: Uint32Array,
 	depth: number,
 	isChance: boolean
 ): number {
@@ -352,13 +343,14 @@ function expectimax(
 		} else {
 			let total = 0;
 			const cellProb = 1 / empty.length;
+			const n = Math.sqrt(board.length);
 			for (const { row, col } of empty) {
-				const next2 = board.map((rowArr) => [...rowArr]);
-				next2[row][col] = 2;
+				const next2 = new Uint32Array(board);
+				next2[row * n + col] = 2;
 				total += 0.9 * cellProb * expectimax(state, next2, depth - 1, false);
 
-				const next4 = board.map((rowArr) => [...rowArr]);
-				next4[row][col] = 4;
+				const next4 = new Uint32Array(board);
+				next4[row * n + col] = 4;
 				total += 0.1 * cellProb * expectimax(state, next4, depth - 1, false);
 			}
 			result = total;
@@ -366,6 +358,7 @@ function expectimax(
 	} else {
 		let best = -Infinity;
 		let anyMove = false;
+		const n = Math.sqrt(board.length);
 		for (const direction of DIRECTIONS) {
 			const m: MoveResult = move(board, direction);
 			if (!m.moved) continue;
@@ -387,17 +380,16 @@ function expectimax(
 }
 
 /**
- * Choose the best move for the current board using expectimax search.
+ * Selects the best move for the current board using expectimax search.
  *
- * A fresh search state is created per request so the memo table is bounded by the branch
- * width of a single search. Workers dispatch this asynchronously; the main thread can
- * use it directly as a fallback.
+ * Iterates all four directions, skips no-op moves, and picks the direction
+ * yielding the highest expectimax score at the requested search depth.
  *
- * @param board - The current board state.
- * @param depth - Maximum search depth (default 3). Shallower depths keep the UI responsive.
- * @returns The optimal direction, or `null` if no move is available.
+ * @param board - Flat board representing the current game state.
+ * @param depth - Search depth for the expectimax tree (default `3`).
+ * @returns The recommended {@link Direction}, or `null` if no moves are possible.
  */
-export function chooseBestMove(board: number[][], depth: number = 3): Direction | null {
+export function chooseBestMove(board: Uint32Array, depth: number = 3): Direction | null {
 	const state: SearchState = {
 		cache: new Map<string, number>(),
 		gameOverPenalty: 1e9,
@@ -418,19 +410,18 @@ export function chooseBestMove(board: number[][], depth: number = 3): Direction 
 }
 
 /**
- * Compute an expectimax search depth from the current board occupancy.
+ * Dynamically selects an expectimax search depth based on board complexity.
  *
- * The function maps empty-cell density to a depth between 2 and 6. When the board is
- * mostly empty the search stays shallow to keep the UI responsive; as space dwindles the
- * AI invests more computation because the branching factor naturally drops and late-game
- * decisions matter more.
+ * Shallower searches are used when many empty cells remain (faster, less precise),
+ * while deeper searches are used near the end-game for stronger play.
  *
- * @param board - The current board state.
- * @returns A search depth between 2 and 6 (inclusive).
+ * @param board - Flat board to analyze.
+ * @returns Search depth between `2` and `6` inclusive.
  */
-export function computeAutoDepth(board: number[][]): number {
+export function computeAutoDepth(board: Uint32Array): number {
+	const n = Math.sqrt(board.length);
 	const empty = getEmptyCells(board).length;
-	const total = board.length * board.length;
+	const total = n * n;
 	const ratio = empty / total;
 	if (ratio > 0.7) return 2;
 	if (ratio > 0.5) return 3;

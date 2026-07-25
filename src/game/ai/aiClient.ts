@@ -4,32 +4,26 @@ import type { AiRequest, AiResponse } from './ai.worker';
 
 type Pending = (direction: Direction | null) => void;
 
-// Lazy-init singleton worker with request-correlation via incrementing IDs.
 let worker: Worker | null = null;
 let nextId = 0;
 const pending = new Map<number, Pending>();
 
 /**
- * Feature-detect whether the current environment provides Web Worker support.
+ * Checks whether the current environment supports Web Workers.
  *
- * Not every environment provides Web Worker support (e.g., some SSR or older browsers).
- * This guard avoids throwing at module import time and lets the AI degrade gracefully to
- * a synchronous main-thread fallback.
- *
- * @returns `true` if `Worker` is available.
+ * @returns `true` if `Worker` is available in the global scope.
  */
 function supportsWorker(): boolean {
 	return typeof Worker !== 'undefined';
 }
 
 /**
- * Lazily initialize and return the singleton AI worker.
+ * Lazily creates (or returns the cached) AI Web Worker.
  *
- * Using a singleton avoids spawning redundant threads if multiple components request AI
- * moves concurrently. The module URL resolution via `import.meta.url` is required because
- * relative paths in `new Worker()` are resolved from the HTML page, not the module file.
+ * If workers are unsupported, returns `null`. The worker is instantiated once
+ * and reused for all subsequent requests.
  *
- * @returns The singleton worker, or `null` if workers are unsupported.
+ * @returns A running {@link Worker} instance, or `null` if workers are unavailable.
  */
 function getWorker(): Worker | null {
 	if (!supportsWorker()) return null;
@@ -43,7 +37,6 @@ function getWorker(): Worker | null {
 		pending.delete(e.data.id);
 		resolve(e.data.direction);
 	};
-	// Reject all pending requests on worker error to avoid hanging promises.
 	worker.onerror = () => {
 		for (const resolve of pending.values()) resolve(null);
 		pending.clear();
@@ -52,21 +45,17 @@ function getWorker(): Worker | null {
 }
 
 /**
- * Dispatch an AI move request to the background worker (or main-thread fallback).
+ * Requests the best move from the AI, delegating to a Web Worker when available.
  *
- * Deep-clones the board before posting so worker mutation cannot affect the caller's
- * reactive state. Shared memory (`Transferable`) is not used here because the board is
- * small enough that `structuredClone` overhead is negligible relative to expectimax cost.
+ * If the environment lacks worker support or the worker fails, the computation
+ * falls back to running {@link chooseBestMove} synchronously on the main thread.
  *
- * Correlation IDs let many in-flight requests coexist without ordering constraints; the
- * worker replies with the same ID so we can resolve the correct Promise.
- *
- * @param board - The current board snapshot.
- * @param depth - Maximum expectimax search depth.
- * @returns A promise that resolves to the best direction, or `null` if unavailable.
+ * @param board - Flat board representing the current game state.
+ * @param depth - Expectimax search depth to use for the calculation.
+ * @returns A promise that resolves to the recommended {@link Direction}, or `null` if no moves are possible.
  */
 export function requestBestMove(
-	board: number[][],
+	board: Uint32Array,
 	depth: number
 ): Promise<Direction | null> {
 	if (!supportsWorker()) {
@@ -77,8 +66,8 @@ export function requestBestMove(
 	if (!w) return Promise.resolve(chooseBestMove(board, depth));
 
 	const id = nextId++;
-	const plainBoard = board.map((row) => [...row]);
-	const request: AiRequest = { id, board: plainBoard, depth };
+	const flatBoard = new Uint32Array(board);
+	const request: AiRequest = { id, board: flatBoard, depth };
 	return new Promise<Direction | null>((resolve) => {
 		pending.set(id, resolve);
 		w.postMessage(request);

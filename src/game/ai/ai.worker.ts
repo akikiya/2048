@@ -3,14 +3,14 @@ import { chooseBestMove } from './ai';
 import type { Direction } from '../game';
 
 /**
- * Serialized request payload sent from the main thread to the AI worker.
+ * Request payload sent from the main thread to the AI worker.
  */
 export interface AiRequest {
-	/** Correlation ID matching the pending Promise resolver. */
+	/** Correlates the request with its corresponding {@link AiResponse}. */
 	id: number;
-	/** Deep-cloned board snapshot so worker mutation cannot leak back. */
-	board: number[][];
-	/** Maximum expectimax search depth. */
+	/** Flat board representing the current game state to evaluate. */
+	board: Uint32Array;
+	/** Expectimax search depth to use for this calculation. */
 	depth: number;
 }
 
@@ -18,18 +18,17 @@ export interface AiRequest {
  * Response payload sent from the AI worker back to the main thread.
  */
 export interface AiResponse {
-	/** Correlation ID echoing the request so the correct resolver is matched. */
+	/** Matches the `id` of the originating {@link AiRequest}. */
 	id: number;
-	/** The best direction, or `null` if no move is available. */
+	/** Best move direction determined by the AI, or `null` if no moves exist. */
 	direction: Direction | null;
 }
 
 /**
- * Delegates the heavy expectimax computation to a background thread.
+ * Worker message handler that delegates AI computation to the expectimax solver.
  *
- * Because the worker is stateless, any message it receives is processed in isolation —
- * no board is mutated before the serialized copy is POSTed back, which eliminates
- * reactivity hazards across the worker boundary.
+ * Receives an {@link AiRequest}, computes the best move via {@link chooseBestMove},
+ * and posts an {@link AiResponse} back to the main thread.
  */
 self.onmessage = (e: MessageEvent<AiRequest>) => {
 	const { id, board, depth } = e.data;

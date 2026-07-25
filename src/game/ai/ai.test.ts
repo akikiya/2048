@@ -5,13 +5,20 @@ import {
 	chooseBestMove,
 } from './ai';
 
-function setBoard(rows: number[][]): number[][] {
-	return rows.map((r) => [...r]);
+function flatBoard(rows: number[][]): Uint32Array {
+	const n = rows.length;
+	const board = new Uint32Array(n * n);
+	for (let r = 0; r < n; r++) {
+		for (let c = 0; c < n; c++) {
+			board[r * n + c] = rows[r][c];
+		}
+	}
+	return board;
 }
 
 describe('boardKey', () => {
 	it('returns a unique string for a given board', () => {
-		const board = setBoard([
+		const board = flatBoard([
 			[2, 0, 4, 0],
 			[0, 8, 0, 0],
 			[16, 0, 0, 32],
@@ -21,13 +28,13 @@ describe('boardKey', () => {
 	});
 
 	it('distinguishes different boards with the same filled cells', () => {
-		const a = setBoard([
+		const a = flatBoard([
 			[2, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 4],
 		]);
-		const b = setBoard([
+		const b = flatBoard([
 			[0, 0, 0, 2],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
@@ -39,7 +46,7 @@ describe('boardKey', () => {
 
 describe('evaluate', () => {
 	it('returns a finite positive score for an empty board', () => {
-		const board = setBoard([
+		const board = flatBoard([
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
@@ -51,7 +58,7 @@ describe('evaluate', () => {
 	});
 
 	it('returns the same score for identical boards', () => {
-		const board = setBoard([
+		const board = flatBoard([
 			[2, 4, 0, 0],
 			[4, 8, 0, 0],
 			[0, 0, 0, 0],
@@ -61,13 +68,13 @@ describe('evaluate', () => {
 	});
 
 	it('awards a higher score when the max tile is in a corner than when it is in the center', () => {
-		const corner = setBoard([
+		const corner = flatBoard([
 			[2048, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
 		]);
-		const center = setBoard([
+		const center = flatBoard([
 			[0, 0, 0, 0],
 			[0, 0, 2048, 0],
 			[0, 0, 0, 0],
@@ -79,7 +86,7 @@ describe('evaluate', () => {
 
 describe('chooseBestMove', () => {
 	it('returns a direction when at least one move is legal', () => {
-		const board = setBoard([
+		const board = flatBoard([
 			[2, 0, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
@@ -90,7 +97,7 @@ describe('chooseBestMove', () => {
 	});
 
 	it('returns null when no move is possible', () => {
-		const board = setBoard([
+		const board = flatBoard([
 			[2, 4, 2, 4],
 			[4, 2, 4, 2],
 			[2, 4, 2, 4],
@@ -101,7 +108,7 @@ describe('chooseBestMove', () => {
 	});
 
 	it('returns a deterministic direction for the same board', () => {
-		const board = setBoard([
+		const board = flatBoard([
 			[2, 2, 0, 0],
 			[0, 0, 0, 0],
 			[0, 0, 0, 0],
