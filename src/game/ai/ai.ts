@@ -226,7 +226,7 @@ function cornerQualityScore(board: Uint32Array): number {
 
 	const [mr, mc] = [positions[0].r, positions[0].c];
 	const onEdge = mr === 0 || mr === n - 1 || mc === 0 || mc === n - 1;
-	if (!onEdge && maxVal > 0) score -= 30;
+	if (!onEdge && maxVal > 0) score -= maxVal > 16 ? 15 : 30;
 
 	return score;
 }
@@ -253,7 +253,6 @@ function evaluate(board: Uint32Array): number {
 	let empty = 0;
 	let weightSum = 0;
 	let maxTile = 0;
-	let maxAtCorner = false;
 
 	for (let row = 0; row < n; row++) {
 		const rowOffset = row * n;
@@ -265,13 +264,6 @@ function evaluate(board: Uint32Array): number {
 				weightSum += log2(value) * weightMatrix[rowOffset + col];
 				if (value > maxTile) maxTile = value;
 			}
-		}
-	}
-
-	for (const [r, c] of corners) {
-		if (board[r * n + c] === maxTile && maxTile !== 0) {
-			maxAtCorner = true;
-			break;
 		}
 	}
 
@@ -287,8 +279,7 @@ function evaluate(board: Uint32Array): number {
 		monotonicityScore(board) * 1.5 +
 		mergeable * 1.5 +
 		snake * 2.0 +
-		cornerQuality +
-		(maxAtCorner ? 10 : 0)
+		cornerQuality
 	);
 }
 
