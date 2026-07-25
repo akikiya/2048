@@ -15,13 +15,19 @@ Join the tiles to reach **2048**! Slide the tiles with arrow keys (or WASD), and
 - Adjustable **search depth** (1–6) and **move speed** (0–500 ms) for the AI
 - Pure, framework-agnostic game logic with unit tests
 
+## Prerequisites
+
+- **Node.js** >= 18 (ES2023 target)
+- **pnpm** >= 9 (recommended)
+
 ## Getting started
 
-This project uses [pnpm](https://pnpm.io/).
-
 ```bash
+# install dependencies
 pnpm install
-pnpm dev      # start the dev server (Vite)
+
+# start the dev server (Vite)
+pnpm dev
 ```
 
 Other scripts:
@@ -33,7 +39,7 @@ pnpm check    # type-check with svelte-check + tsc
 pnpm test     # run unit tests with vitest
 ```
 
-> Requires Node.js (the toolchain targets modern ES2023 modules). If you prefer npm, swap `pnpm` for `npm run` / `npx`.
+> If you prefer npm, swap `pnpm` for `npm run` / `npx`. Lockfile is pnpm-based.
 
 ## How to play
 
@@ -47,7 +53,7 @@ pnpm test     # run unit tests with vitest
 
 ## AI solver
 
-The AI uses **Expectimax search** with a heuristic evaluation (empty-cell count, weighted positional score, smoothness, monotonicity, mergeable pairs, and a corner bonus for the max tile). It runs in a [Web Worker](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API) (`src/game/ai/ai.worker.ts`) so heavy computation never blocks rendering. The main thread talks to it through `src/game/ai/aiClient.ts`, which lazily spawns the worker, matches responses by request id, and falls back to a synchronous call when `Worker` is unavailable (e.g. Node/SSR/tests).
+The AI uses **Expectimax search** with a heuristic evaluation (empty-cell count, weighted positional score, smoothness, monotonicity, mergeable pairs, snake ordering, and a corner bonus for the max tile). It runs in a [Web Worker](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API) (`src/game/ai/ai.worker.ts`) so heavy computation never blocks rendering. The main thread talks to it through `src/game/ai/aiClient.ts`, which lazily spawns the worker, matches responses by request id, and falls back to a synchronous call when `Worker` is unavailable (e.g. Node/SSR/tests).
 
 Search results are memoized via a transposition cache to avoid recomputing identical board states.
 
@@ -101,6 +107,15 @@ Run `pnpm test` to see the covered cases.
 - **State lives in composables, not the view.** `App.svelte` is a composition root: it creates `createGame(4)`, `useAI(game)`, and `useKeyboard(...)` and passes state/callbacks down to components. Components stay presentational and never own game state.
 - **Svelte 5 runes.** Components use `$props()` and callbacks; the game store uses `$state` inside a `.svelte.ts` module so reactivity flows across files.
 - **Scoped styles.** Each component ships its own `<style>` block; `app.css` only holds design tokens (CSS variables) and a few truly global rules.
+
+## Deployment
+
+This project is configured for automated deployment via GitHub Actions:
+
+- **GitHub Pages**: on every push to `main`, the project is built and deployed to GitHub Pages with base path `/2048/`.
+- **xmit.co**: a separate build with base `/` is deployed to `2048board.xmit.dev`.
+
+To deploy locally or on your own host, run `pnpm build` and serve the `dist/` directory with any static file server.
 
 ## License
 
