@@ -24,7 +24,7 @@ describe('boardKey', () => {
 			[16, 0, 0, 32],
 			[0, 0, 0, 0],
 		]);
-		expect(boardKey(board)).toBe('2,0,4,0,0,8,0,0,16,0,0,32,0,0,0,0,');
+		expect(boardKey(board)).toBe('2,0,4,0,0,8,0,0,16,0,0,32,0,0,0,0');
 	});
 
 	it('distinguishes different boards with the same filled cells', () => {

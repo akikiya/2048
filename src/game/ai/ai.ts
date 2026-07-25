@@ -65,11 +65,7 @@ function syncSize(board: Uint32Array) {
  * @returns A deterministic string representation of the board state.
  */
 function boardKey(board: Uint32Array): string {
-	let key = '';
-	for (let i = 0; i < board.length; i++) {
-		key += board[i] + ',';
-	}
-	return key;
+	return Array.from(board).join(',');
 }
 
 /**
@@ -163,29 +159,125 @@ function countMergeable(board: Uint32Array): number {
 }
 
 /**
+ * Penalizes high-value tiles that are trapped and cannot merge or move.
+ *
+ * A tile is considered isolated when all its orthogonal neighbors are either
+ * empty or hold smaller values, leaving it unable to participate in any merge
+ * and likely to block useful empty cells nearby.
+ *
+ * @param board - Flat board to evaluate.
+ * @returns A negative score (lower is worse).
+ */
+function isolationPenalty(board: Uint32Array): number {
+	const n = Math.sqrt(board.length);
+	let penalty = 0;
+	for (let row = 0; row < n; row++) {
+		for (let col = 0; col < n; col++) {
+			const value = board[row * n + col];
+			if (value === 0 || value <= 4) continue;
+			const log = log2(value);
+			const north = row > 0 ? board[(row - 1) * n + col] : 0;
+			const south = row < n - 1 ? board[(row + 1) * n + col] : 0;
+			const west = col > 0 ? board[row * n + col - 1] : 0;
+			const east = col < n - 1 ? board[row * n + col + 1] : 0;
+			const neighbors = [north, south, west, east];
+			const allSmallerOrEmpty = neighbors.every((v) => v === 0 || v < value);
+			if (allSmallerOrEmpty) {
+				penalty += log * 4;
+			}
+		}
+	}
+	return -penalty;
+}
+
+/**
+ * Counts pairs of tiles that could merge in a single move.
+ *
+ * Unlike {@link countMergeable}, this looks at all positions where a
+ * merge could occur after any single sliding move, not just tiles that
+ * are already adjacent and equal.
+ *
+ * @param board - Flat board to evaluate.
+ * @returns A sum of log2 values for all潜在 (potential) merge pairs.
+ */
+function mergePotential(board: Uint32Array): number {
+	const n = Math.sqrt(board.length);
+	let potential = 0;
+
+	for (let row = 0; row < n; row++) {
+		for (let col = 0; col < n - 1; col++) {
+			const v1 = board[row * n + col];
+			const v2 = board[row * n + col + 1];
+			if (v1 === v2 && v1 > 0) {
+				potential += log2(v1);
+			} else if (v1 > 0 && v2 > 0 && v1 !== v2) {
+				potential += Math.min(log2(v1), log2(v2)) * 0.25;
+			}
+		}
+	}
+
+	for (let col = 0; col < n; col++) {
+		for (let row = 0; row < n - 1; row++) {
+			const v1 = board[row * n + col];
+			const v2 = board[(row + 1) * n + col];
+			if (v1 === v2 && v1 > 0) {
+				potential += log2(v1);
+			} else if (v1 > 0 && v2 > 0 && v1 !== v2) {
+				potential += Math.min(log2(v1), log2(v2)) * 0.25;
+			}
+		}
+	}
+
+	return potential;
+}
+
+/**
  * Awards points when tiles follow a "snake" ordering (zig-zag descending).
  *
  * The snake pattern keeps the largest tile in a corner with descending values
- * weaving toward the opposite corner.
+ * weaving toward the opposite corner. This enhanced version checks both the
+ * primary snake path (from the corner with the largest tile) and the reverse
+ * path, rewarding longer monotonic sequences.
  *
  * @param board - Flat board to evaluate.
  * @returns A snake-sequencing score (higher is better).
  */
 function snakeScore(board: Uint32Array): number {
 	const n = Math.sqrt(board.length);
-	let score = 0;
-	for (let row = 0; row < n; row++) {
-		const evenRow = row % 2 === 0;
-		for (let col = 0; col < n - 1; col++) {
-			const c1 = evenRow ? col : n - 1 - col;
-			const c2 = evenRow ? col + 1 : n - 1 - (col + 1);
-			const v1 = board[row * n + c1] ? log2(board[row * n + c1]) : 0;
-			const v2 = board[row * n + c2] ? log2(board[row * n + c2]) : 0;
-			if (v1 >= v2) score += (v1 - v2) * 0.5;
-			else score -= (v2 - v1);
+	let bestSnake = 0;
+
+	for (const corner of corners) {
+		const [cr, cc] = corner;
+		const directionRow = cr === 0 ? 1 : -1;
+		const directionCol = cc === 0 ? 1 : -1;
+		let score = 0;
+		let prevLog = Infinity;
+		let steps = 0;
+
+		for (let i = 0; i < n; i++) {
+			const row = cr + directionRow * i;
+			for (let j = 0; j < n - 1; j++) {
+				const c1 = cc + directionCol * j;
+				const c2 = cc + directionCol * (j + 1);
+				const v1 = board[row * n + c1] ? log2(board[row * n + c1]) : 0;
+				const v2 = board[row * n + c2] ? log2(board[row * n + c2]) : 0;
+				if (v1 >= v2 && v1 <= prevLog) {
+					score += (v1 - v2) * 0.5;
+					prevLog = v1;
+					steps++;
+				} else if (v1 === v2 && v1 > 0) {
+					score += (v1 - v2) * 0.5;
+					prevLog = v1;
+					steps++;
+				} else {
+					prevLog = Infinity;
+				}
+			}
 		}
+		if (steps > n - 1) bestSnake = Math.max(bestSnake, score);
 	}
-	return score;
+
+	return bestSnake;
 }
 
 /**
@@ -270,6 +362,8 @@ function evaluate(board: Uint32Array): number {
 	const mergeable = countMergeable(board);
 	const snake = snakeScore(board);
 	const cornerQuality = cornerQualityScore(board);
+	const isolation = isolationPenalty(board);
+	const potential = mergePotential(board);
 
 	return (
 		weightSum * 1.2 +
@@ -279,7 +373,9 @@ function evaluate(board: Uint32Array): number {
 		monotonicityScore(board) * 1.5 +
 		mergeable * 1.5 +
 		snake * 2.0 +
-		cornerQuality
+		cornerQuality +
+		isolation +
+		potential * 0.75
 	);
 }
 
@@ -334,15 +430,16 @@ function expectimax(
 		} else {
 			let total = 0;
 			const cellProb = 1 / empty.length;
+			const scratch = new Uint32Array(board);
 			const n = Math.sqrt(board.length);
 			for (const { row, col } of empty) {
-				const next2 = new Uint32Array(board);
-				next2[row * n + col] = 2;
-				total += 0.9 * cellProb * expectimax(state, next2, depth - 1, false);
+				scratch[row * n + col] = 2;
+				total += 0.9 * cellProb * expectimax(state, scratch, depth - 1, false);
 
-				const next4 = new Uint32Array(board);
-				next4[row * n + col] = 4;
-				total += 0.1 * cellProb * expectimax(state, next4, depth - 1, false);
+				scratch[row * n + col] = 4;
+				total += 0.1 * cellProb * expectimax(state, scratch, depth - 1, false);
+
+				scratch[row * n + col] = 0;
 			}
 			result = total;
 		}
@@ -432,4 +529,6 @@ export {
 	snakeScore,
 	cornerQualityScore,
 	expectimax,
+	isolationPenalty,
+	mergePotential,
 };
