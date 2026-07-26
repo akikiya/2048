@@ -8,8 +8,8 @@
   let { value, row, col }: Props = $props();
 </script>
 
-<div class="tile tile-{value}" style="--r: {row}; --c: {col}">
-  {value}
+<div class="tile tile-{value>8192 ? 8192: value}" style="--r: {row}; --c: {col}">
+  {value >8192? `2^${Math.log2(value)}` : value}
 </div>
 
 <style>
