@@ -1,4 +1,4 @@
-import { move, getEmptyCells, type Direction, type MoveResult } from '../game';
+import { move, getEmptyCells, getHighestTile, type Direction, type MoveResult } from '../game';
 
 const DIRECTIONS: Direction[] = ['up', 'down', 'left', 'right'];
 
@@ -92,13 +92,15 @@ function smoothScore(board: Uint32Array): number {
 	let score = 0;
 	for (let row = 0; row < n; row++) {
 		for (let col = 0; col < n; col++) {
-			const value = board[row * n + col];
-			if (value === 0) continue;
-			const log = log2(value);
-			if (row > 0 && board[(row - 1) * n + col] !== 0)
-				score -= Math.abs(log - log2(board[(row - 1) * n + col]));
-			if (col < n - 1 && board[row * n + col + 1] !== 0)
+			const val = board[row * n + col];
+			if (val === 0) continue;
+			const log = log2(val);
+			if (col + 1 < n && board[row * n + col + 1] !== 0) {
 				score -= Math.abs(log - log2(board[row * n + col + 1]));
+			}
+			if (row + 1 < n && board[(row + 1) * n + col] !== 0) {
+				score -= Math.abs(log - log2(board[(row + 1) * n + col]));
+			}
 		}
 	}
 	return score;
@@ -210,8 +212,6 @@ function mergePotential(board: Uint32Array): number {
 			const v2 = board[row * n + col + 1];
 			if (v1 === v2 && v1 > 0) {
 				potential += log2(v1);
-			} else if (v1 > 0 && v2 > 0 && v1 !== v2) {
-				potential += Math.min(log2(v1), log2(v2)) * 0.25;
 			}
 		}
 	}
@@ -222,13 +222,48 @@ function mergePotential(board: Uint32Array): number {
 			const v2 = board[(row + 1) * n + col];
 			if (v1 === v2 && v1 > 0) {
 				potential += log2(v1);
-			} else if (v1 > 0 && v2 > 0 && v1 !== v2) {
-				potential += Math.min(log2(v1), log2(v2)) * 0.25;
 			}
 		}
 	}
 
 	return potential;
+}
+
+/**
+ * Counts pairs of equal tiles separated by exactly one empty cell.
+ *
+ * These patterns are especially valuable because one horizontal or vertical
+ * slide will immediately merge them, often enabling a chain reaction.
+ *
+ * @param board - Flat board to evaluate.
+ * @returns A sum of log2 values for all one-away merge pairs.
+ */
+function oneAwayMerge(board: Uint32Array): number {
+	const n = Math.sqrt(board.length);
+	let count = 0;
+	for (let row = 0; row < n; row++) {
+		for (let col = 0; col < n - 2; col++) {
+			const mid = board[row * n + col + 1];
+			if (mid === 0) {
+				const v = board[row * n + col];
+				if (v > 0 && v === board[row * n + col + 2]) {
+					count += log2(v);
+				}
+			}
+		}
+	}
+	for (let col = 0; col < n; col++) {
+		for (let row = 0; row < n - 2; row++) {
+			const mid = board[(row + 1) * n + col];
+			if (mid === 0) {
+				const v = board[row * n + col];
+				if (v > 0 && v === board[(row + 2) * n + col]) {
+					count += log2(v);
+				}
+			}
+		}
+	}
+	return count;
 }
 
 /**
@@ -244,40 +279,54 @@ function mergePotential(board: Uint32Array): number {
  */
 function snakeScore(board: Uint32Array): number {
 	const n = Math.sqrt(board.length);
-	let bestSnake = 0;
+	let bestScore = -Infinity;
 
-	for (const corner of corners) {
-		const [cr, cc] = corner;
-		const directionRow = cr === 0 ? 1 : -1;
-		const directionCol = cc === 0 ? 1 : -1;
-		let score = 0;
+	const configs: { startRow: number; startCol: number; rowDir: number; firstColDir: number }[] = [
+		{ startRow: 0, startCol: 0, rowDir: 1, firstColDir: 1 },
+		{ startRow: 0, startCol: n - 1, rowDir: 1, firstColDir: -1 },
+		{ startRow: n - 1, startCol: 0, rowDir: -1, firstColDir: 1 },
+		{ startRow: n - 1, startCol: n - 1, rowDir: -1, firstColDir: -1 },
+	];
+
+	for (const cfg of configs) {
+		let row = cfg.startRow;
+		let col = cfg.startCol;
+		let colDir = cfg.firstColDir;
 		let prevLog = Infinity;
-		let steps = 0;
+		let score = 0;
+		let validatedTiles = 0;
 
 		for (let i = 0; i < n; i++) {
-			const row = cr + directionRow * i;
-			for (let j = 0; j < n - 1; j++) {
-				const c1 = cc + directionCol * j;
-				const c2 = cc + directionCol * (j + 1);
-				const v1 = board[row * n + c1] ? log2(board[row * n + c1]) : 0;
-				const v2 = board[row * n + c2] ? log2(board[row * n + c2]) : 0;
-				if (v1 >= v2 && v1 <= prevLog) {
-					score += (v1 - v2) * 0.5;
-					prevLog = v1;
-					steps++;
-				} else if (v1 === v2 && v1 > 0) {
-					score += (v1 - v2) * 0.5;
-					prevLog = v1;
-					steps++;
-				} else {
-					prevLog = Infinity;
+			for (let j = 0; j < n; j++) {
+				const val = board[row * n + col];
+				const log = val ? log2(val) : 0;
+
+				if (val !== 0) {
+					if (log <= prevLog) {
+						const positionWeight = (n - i) * 1.5 + (colDir === -1 ? col : (n - 1 - col)) * 0.3;
+						score += log * positionWeight;
+						if (log === prevLog && prevLog !== Infinity) {
+							score += log * 8;
+						}
+						prevLog = log;
+						validatedTiles++;
+					} else {
+						prevLog = Infinity;
+					}
 				}
+				col += colDir;
 			}
+			row += cfg.rowDir;
+			colDir = -colDir;
+			col = colDir === 1 ? 0 : n - 1;
 		}
-		if (steps > n - 1) bestSnake = Math.max(bestSnake, score);
+
+		if (validatedTiles >= n) {
+			bestScore = Math.max(bestScore, score);
+		}
 	}
 
-	return bestSnake;
+	return bestScore === -Infinity ? 0 : bestScore;
 }
 
 /**
@@ -324,6 +373,44 @@ function cornerQualityScore(board: Uint32Array): number {
 }
 
 /**
+ * Penalizes high-value tiles that are not anchored in the target corner.
+ *
+ * A strong 2048 strategy keeps the highest tile in a corner. This heuristic
+ * gives a large positive bonus when the largest tile sits in a corner and
+ * a steep penalty proportional to its Manhattan distance when it does not.
+ *
+ * @param board - Flat board to evaluate.
+ * @returns A corner-anchoring score (higher is better).
+ */
+function cornerBomb(board: Uint32Array): number {
+	const n = Math.sqrt(board.length);
+	const max = getHighestTile(board);
+	if (max === 0) return 0;
+
+	let maxRow = -1;
+	let maxCol = -1;
+	for (let r = 0; r < n; r++) {
+		for (let c = 0; c < n; c++) {
+			if (board[r * n + c] === max) {
+				maxRow = r;
+				maxCol = c;
+			}
+		}
+	}
+
+	let bestCornerDist = Infinity;
+	for (const [cr, cc] of corners) {
+		const dist = Math.abs(maxRow - cr) + Math.abs(maxCol - cc);
+		bestCornerDist = Math.min(bestCornerDist, dist);
+	}
+
+	if (bestCornerDist === 0) {
+		return Math.log2(max) * 800;
+	}
+	return -Math.log2(max) * 800 * bestCornerDist;
+}
+
+/**
  * Computes a heuristic evaluation score for the current board state.
  *
  * Combines multiple weighted features:
@@ -334,7 +421,9 @@ function cornerQualityScore(board: Uint32Array): number {
  * - Monotonicity
  * - Mergeable pair count
  * - Snake ordering
- * - Corner quality
+ * - Corner bomb (max tile anchored in corner)
+ * - One-away merge potential
+ * - Isolation penalty
  *
  * @param board - Flat board to evaluate.
  * @returns A numeric score where higher values indicate stronger positions.
@@ -361,21 +450,22 @@ function evaluate(board: Uint32Array): number {
 
 	const mergeable = countMergeable(board);
 	const snake = snakeScore(board);
-	const cornerQuality = cornerQualityScore(board);
 	const isolation = isolationPenalty(board);
-	const potential = mergePotential(board);
+	const smooth = smoothScore(board);
+	const mono = monotonicityScore(board);
+	const oneAway = oneAwayMerge(board);
+	const cornerB = cornerBomb(board);
 
 	return (
-		weightSum * 1.2 +
-		(maxTile > 0 ? Math.log2(maxTile) * 2.7 : 0) +
-		empty * 2.7 +
-		smoothScore(board) * 0.5 +
-		monotonicityScore(board) * 1.5 +
-		mergeable * 1.5 +
-		snake * 2.0 +
-		cornerQuality +
-		isolation +
-		potential * 0.75
+		weightSum * 1.0 +
+		cornerB +
+		empty * empty * 80 +
+		mergeable * 10.0 +
+		snake * 4.0 +
+		mono * 2.0 +
+		smooth * 1.0 +
+		oneAway * 6.0 +
+		isolation * 1.0
 	);
 }
 
@@ -478,6 +568,11 @@ function expectimax(
  * @returns The recommended {@link Direction}, or `null` if no moves are possible.
  */
 export function chooseBestMove(board: Uint32Array, depth: number = 3): Direction | null {
+	const candidates = DIRECTIONS
+		.map((dir) => ({ dir, result: move(board, dir) }))
+		.filter((c) => c.result.moved)
+		.sort((a, b) => evaluate(b.result.board) - evaluate(a.result.board));
+
 	const state: SearchState = {
 		cache: new Map<string, number>(),
 		gameOverPenalty: 1e9,
@@ -485,13 +580,11 @@ export function chooseBestMove(board: Uint32Array, depth: number = 3): Direction
 
 	let bestDirection: Direction | null = null;
 	let bestScore = -Infinity;
-	for (const direction of DIRECTIONS) {
-		const result = move(board, direction);
-		if (!result.moved) continue;
+	for (const { dir, result } of candidates) {
 		const score = expectimax(state, result.board, depth - 1, true);
 		if (score > bestScore) {
 			bestScore = score;
-			bestDirection = direction;
+			bestDirection = dir;
 		}
 	}
 	return bestDirection;
@@ -504,7 +597,7 @@ export function chooseBestMove(board: Uint32Array, depth: number = 3): Direction
  * while deeper searches are used near the end-game for stronger play.
  *
  * @param board - Flat board to analyze.
- * @returns Search depth between `2` and `6` inclusive.
+ * @returns Search depth between `2` and `5` inclusive.
  */
 export function computeAutoDepth(board: Uint32Array): number {
 	const n = Math.sqrt(board.length);
@@ -515,7 +608,7 @@ export function computeAutoDepth(board: Uint32Array): number {
 	if (ratio > 0.5) return 3;
 	if (ratio > 0.3) return 4;
 	if (ratio > 0.1) return 5;
-	return 6;
+	return 5;
 }
 
 export { boardKey, evaluate };
@@ -531,4 +624,6 @@ export {
 	expectimax,
 	isolationPenalty,
 	mergePotential,
+	oneAwayMerge,
+	cornerBomb,
 };

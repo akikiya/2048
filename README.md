@@ -11,7 +11,7 @@ Join the tiles to reach **2048**! Slide the tiles with arrow keys (or WASD), and
 - Live score and best score (persisted per board size in `localStorage`)
 - Win overlay at 2048 with a "Keep going" option
 - Game-over detection when no moves remain
-- **AI auto-play** — an Expectimax solver plays the game for you, running off the main thread in a Web Worker so the UI stays responsive
+- **AI auto-play** — an Expectimax solver that consistently reaches higher scores by enforcing snake-order monotonicity, corner-anchoring the max tile, and prioritizing merge chains, all computed in a Web Worker to keep the UI smooth
 - Adjustable **search depth** (1–6) and **move speed** (0–500 ms) for the AI
 - Pure, framework-agnostic game logic with unit tests
 
@@ -53,9 +53,9 @@ pnpm test     # run unit tests with vitest
 
 ## AI solver
 
-The AI uses **Expectimax search** with a heuristic evaluation (empty-cell count, weighted positional score, smoothness, monotonicity, mergeable pairs, snake ordering, and a corner bonus for the max tile). It runs in a [Web Worker](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API) (`src/game/ai/ai.worker.ts`) so heavy computation never blocks rendering. The main thread talks to it through `src/game/ai/aiClient.ts`, which lazily spawns the worker, matches responses by request id, and falls back to a synchronous call when `Worker` is unavailable (e.g. Node/SSR/tests).
+The AI uses **Expectimax search** with an enhanced heuristic evaluation: empty-cell count with quadratic penalty, corner-anchoring bomb for the max tile (Manhattan distance decay), snake-order path scoring with merge bonuses, strict monotonicity, smoothness, one-away merge potential, and trapped-tile isolation penalty. It runs in a [Web Worker](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API) (`src/game/ai/ai.worker.ts`) so heavy computation never blocks rendering. The main thread talks to it through `src/game/ai/aiClient.ts`, which lazily spawns the worker, matches responses by request id, and falls back to a synchronous call when `Worker` is unavailable (e.g. Node/SSR/tests).
 
-Search results are memoized via a transposition cache to avoid recomputing identical board states.
+Search results are memoized via a transposition cache to avoid recomputing identical board states. Move ordering by shallow evaluation improves cache hit rate.
 
 > **Performance tip**: raising `Depth` makes the AI noticeably stronger but slower. Because the solver runs in a Worker, even deep searches keep the board smooth — just increase the `Speed` if you want time to watch each move.
 
