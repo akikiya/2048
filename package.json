@@ -18,6 +18,7 @@
     "svelte-check": "^4.7.1",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
+    "vite-plugin-sitemap": "^0.8.2",
     "vitest": "^4.1.10"
   }
 }
