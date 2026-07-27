@@ -1,3 +1,4 @@
+import { browser } from '$app/environment';
 import {
 	createInitialBoard,
 	move,
@@ -48,10 +49,12 @@ function bestKey(size: number): string {
 // Migrate the old single-best-score key into the new per-size schema on first load.
 // This handles legacy data from before per-size storage was introduced.
 const LEGACY_BEST_KEY = '2048-best';
-const legacyBest = localStorage.getItem(LEGACY_BEST_KEY);
-if (legacyBest !== null && localStorage.getItem(bestKey(4)) === null) {
-	localStorage.setItem(bestKey(4), legacyBest);
-	localStorage.removeItem(LEGACY_BEST_KEY);
+if (browser) {
+	const legacyBest = localStorage.getItem(LEGACY_BEST_KEY);
+	if (legacyBest !== null && localStorage.getItem(bestKey(4)) === null) {
+		localStorage.setItem(bestKey(4), legacyBest);
+		localStorage.removeItem(LEGACY_BEST_KEY);
+	}
 }
 
 /**
@@ -68,7 +71,7 @@ export function createGame(initialSize = 4) {
 	let size = $state(initialSize);
 	let board = $state(createInitialBoard(initialSize));
 	let score = $state(0);
-	let best = $state(Number(localStorage.getItem(bestKey(size))) || 0);
+	let best = $state(browser ? Number(localStorage.getItem(bestKey(size))) || 0 : 0);
 	let won = $state(false);
 	let keepPlaying = $state(false);
 	let over = $state(false);
@@ -127,7 +130,7 @@ export function createGame(initialSize = 4) {
 	function changeSize(next: number) {
 		if (next === size) return;
 		size = next;
-		best = Number(localStorage.getItem(bestKey(size))) || 0;
+		best = browser ? Number(localStorage.getItem(bestKey(size))) || 0 : 0;
 		reset();
 	}
 

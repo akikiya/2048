@@ -39,7 +39,7 @@ jobs:
       - name: Deploy to xmit.co
         env:
           XMIT_KEY: ${{ secrets.XMIT_KEY }}
-        run: pnpx @xmit.co/xmit 2048board.xmit.dev@210 ./dist
+        run: pnpx @xmit.co/xmit 2048board.xmit.dev@210 ./build
       - name: Build
         run: pnpm build --base /2048/
       - name: Setup Pages
@@ -47,7 +47,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
-          path: "./dist"
+          path: "./build"
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5

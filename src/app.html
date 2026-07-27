@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Play 2048 online for free — the classic tile-sliding puzzle game. Join matching tiles to reach 2048, compete for high scores, and use the built-in AI solver. Supports 3×3 to 6×6 boards." />
+		<meta name="keywords" content="2048 game, online puzzle game, tile sliding game, free browser game, brain training, strategy puzzle, 2048 solver, number merge game, casual game, math game" />
+		<meta name="author" content="akikiya" />
+		<meta name="robots" content="index, follow, max-image-preview:large" />
+		<meta name="referrer" content="no-referrer-when-downgrade" />
+		<link rel="canonical" href="https://2048board.xmit.dev/" />
+
+		<title>2048 — Free Online Tile-Sliding Puzzle Game | Play Now</title>
+		<meta name="title" content="2048 — Free Online Tile-Sliding Puzzle Game | Play Now" />
+
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://2048board.xmit.dev/" />
+		<meta property="og:title" content="2048 — Free Online Tile-Sliding Puzzle Game | Play Now" />
+		<meta property="og:description" content="Join the tiles, get to 2048! Play the classic puzzle game online for free. Supports 3×3 to 6×6 boards with an AI solver." />
+		<meta property="og:image" content="https://2048board.xmit.dev/icons.svg" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content="2048 game tiles arranged on a wooden board" />
+		<meta property="og:site_name" content="2048" />
+		<meta property="og:locale" content="en_US" />
+
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:url" content="https://2048board.xmit.dev/" />
+		<meta name="twitter:title" content="2048 — Free Online Tile-Sliding Puzzle Game | Play Now" />
+		<meta name="twitter:description" content="Join the tiles, get to 2048! Play the classic puzzle game online for free. Supports 3×3 to 6×6 boards with an AI solver." />
+		<meta name="twitter:image" content="https://2048board.xmit.dev/icons.svg" />
+		<meta name="twitter:image:alt" content="2048 game tiles arranged on a wooden board" />
+
+		<meta name="theme-color" content="#8f7a66" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="apple-mobile-web-app-title" content="2048" />
+		<link rel="apple-touch-icon" href="/favicon.svg" />
+		<link rel="preconnect" href="https://github.com" crossorigin />
+		<link rel="manifest" href="/manifest.webmanifest" />
+
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@type": "WebApplication",
+				"name": "2048",
+				"description": "A free browser-based tile-sliding puzzle game where you join matching numbers to reach 2048.",
+				"url": "https://2048board.xmit.dev/",
+				"author": {
+					"@type": "Person",
+					"name": "akikiya"
+				},
+				"applicationCategory": "GameApplication",
+				"operatingSystem": "Web Browser",
+				"offers": {
+					"@type": "Offer",
+					"price": "0",
+					"priceCurrency": "USD"
+				},
+				"genre": ["Puzzle", "Casual", "Educational"],
+				"playMode": "SinglePlayer",
+				"numberOfPlayers": {
+					"@type": "QuantitativeValue",
+					"minValue": 1,
+					"maxValue": 1
+				},
+				"contentRating": "Everyone",
+				"keywords": "2048, puzzle, tile sliding, merge game, free online game, brain training, strategy, math game",
+				"inLanguage": "en"
+			}
+		</script>
+
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@type": "HowTo",
+				"name": "How to Play 2048",
+				"description": "Learn how to play the 2048 tile-sliding puzzle game in your browser.",
+				"step": [
+					{
+						"@type": "HowToStep",
+						"name": "Open the game",
+						"text": "Open 2048 in your browser. The game starts with a 4x4 grid containing two tiles with the number 2 or 4."
+					},
+					{
+						"@type": "HowToStep",
+						"name": "Slide tiles",
+						"text": "Use arrow keys or swipe on touch devices to slide all tiles in one direction."
+					},
+					{
+						"@type": "HowToStep",
+						"name": "Merge matching tiles",
+						"text": "When two tiles with the same number collide, they merge into one tile with double the value."
+					},
+					{
+						"@type": "HowToStep",
+						"name": "Reach 2048",
+						"text": "Keep merging tiles to create larger numbers. The goal is to reach the 2048 tile."
+					},
+					{
+						"@type": "HowToStep",
+						"name": "Change difficulty",
+						"text": "Use the size picker to choose boards from 3x3 to 6x6 for different difficulty levels."
+					}
+				]
+			}
+		</script>
+
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div id="app">%sveltekit.body%</div>
+
+		<noscript>
+			<div style="padding: 2rem; font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+				<h1>2048 — Free Online Tile-Sliding Puzzle Game</h1>
+				<p>
+					<strong>2048</strong> is a classic single-player puzzle game. Slide numbered tiles on a grid to merge matching numbers. Combine tiles to reach <strong>2048</strong> and beyond!
+				</p>
+				<p>
+					<strong>How to play:</strong> Use arrow keys or swipe to move all tiles. Tiles with the same number merge into one. Each move spawns a new tile. The game ends when no moves remain.
+				</p>
+				<p>
+					<strong>Features:</strong> Choose board sizes from 3×3 to 6×6, track your best score, or watch the built-in AI solver play automatically.
+				</p>
+				<p>
+					This interactive game requires JavaScript. Please enable JavaScript in your browser to play.
+				</p>
+				<p>
+					<a href="https://2048board.xmit.dev/">Play 2048 online at 2048board.xmit.dev</a>
+				</p>
+			</div>
+		</noscript>
+	</body>
+</html>
