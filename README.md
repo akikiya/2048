@@ -1,6 +1,6 @@
 # 2048
 
-A classic [2048](https://en.wikipedia.org/wiki/2048_(video_game)) game built with **Svelte 5**, **TypeScript**, and **Vite**.
+A classic [2048](https://en.wikipedia.org/wiki/2048_(video_game)) game built with **Svelte 5**, **TypeScript**, and **SvelteKit**.
 
 Join the tiles to reach **2048**! Slide the tiles with arrow keys (or WASD), and tiles with the same number merge into one. Each move spawns a new tile (2 or 4). The game ends when the board fills with no possible merges.
 
@@ -26,7 +26,7 @@ Join the tiles to reach **2048**! Slide the tiles with arrow keys (or WASD), and
 # install dependencies
 pnpm install
 
-# start the dev server (Vite)
+# start the dev server (SvelteKit/Vite)
 pnpm dev
 ```
 
@@ -65,9 +65,12 @@ The codebase is split into three concerns: **UI components**, **reactive state/c
 
 ```
 src/
-  App.svelte              # thin composition root: wires state + input to components
-  main.ts                 # Svelte mount entry
+  app.html                # app shell with SEO meta tags and JSON-LD
   app.css                 # global tokens (colors), body/layout, shared control styles
+  routes/
+    +layout.svelte        # root layout importing app.css
+    +page.svelte          # composition root: wires state + input to components
+    +page.ts              # prerender export for static generation
 
   components/             # presentational Svelte components (each owns its scoped styles)
     GithubCorner.svelte   # fixed GitHub link ribbon
@@ -104,9 +107,10 @@ Run `pnpm test` to see the covered cases.
 
 ## Architecture notes
 
-- **State lives in composables, not the view.** `App.svelte` is a composition root: it creates `createGame(4)`, `useAI(game)`, and `useKeyboard(...)` and passes state/callbacks down to components. Components stay presentational and never own game state.
+- **State lives in composables, not the view.** `+page.svelte` is a composition root: it creates `createGame(4)`, `useAI(game)`, and `useKeyboard(...)` and passes state/callbacks down to components. Components stay presentational and never own game state.
 - **Svelte 5 runes.** Components use `$props()` and callbacks; the game store uses `$state` inside a `.svelte.ts` module so reactivity flows across files.
 - **Scoped styles.** Each component ships its own `<style>` block; `app.css` only holds design tokens (CSS variables) and a few truly global rules.
+- **SSR-safe.** The page is pre-rendered to static HTML at build time via SvelteKit + adapter-static. Browser-only APIs like `localStorage` are guarded with `browser()` so the build never crashes during static generation.
 
 ## Deployment
 
@@ -115,7 +119,7 @@ This project is configured for automated deployment via GitHub Actions:
 - **GitHub Pages**: on every push to `main`, the project is built and deployed to GitHub Pages with base path `/2048/`.
 - **xmit.co**: a separate build with base `/` is deployed to `2048board.xmit.dev`.
 
-To deploy locally or on your own host, run `pnpm build` and serve the `dist/` directory with any static file server.
+To deploy locally or on your own host, run `pnpm build` and serve the `build/` directory with any static file server.
 
 ## License
 
